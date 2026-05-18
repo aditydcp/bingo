@@ -8,7 +8,7 @@ import ids from "../../public/ids.png";
 import entitasLogo from "../../public/entitas.png";
 import danantara from "../../public/danantara.png";
 
-const ENTITIES = ["PT ID Survey", "PT SUCOFINDO", "PT SI", "PT BKI"];
+const ENTITIES = ["PT IDSurvey", "PT SUCOFINDO", "PT SI", "PT BKI"];
 const API = "";
 
 export default function RegisterPage() {
