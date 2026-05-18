@@ -214,7 +214,7 @@ export default function BingoPage() {
           </div>
         </nav>
 
-        <div className="relative z-10 px-3 pb-8 max-w-lg mx-auto">
+        <div className="relative z-10 px-3 pb-8 max-w-xl mx-auto">
           {/* Bingo banner */}
           {hasBingo && (
             <div className="bingo-banner rounded-xl p-3 my-3 text-center fade-in">
@@ -289,13 +289,13 @@ export default function BingoPage() {
                   ) : isMarked ? (
                     <div className="flex flex-col items-center gap-0.5 p-1">
                       <span className="text-green-400 text-lg">✓</span>
-                      <p className="text-[8px] text-green-300 text-center leading-tight line-clamp-2">
+                      <p className="text-[8px] text-green-300 text-center leading-tight">
                         {cell.label}
                       </p>
                     </div>
                   ) : (
                     <div className="p-1 flex flex-col items-center justify-center h-full">
-                      <p className="text-[9px] leading-tight text-center text-blue-100 line-clamp-3">
+                      <p className="text-[9px] leading-tight text-center text-blue-100">
                         {cell.label}
                       </p>
                       <div className="mt-1 w-4 h-4 rounded-full border border-blue-400/40 flex items-center justify-center">

@@ -151,7 +151,7 @@ body {
 }
 
 .bingo-cell {
-  aspect-ratio: 1;
+  min-height: clamp(62px, 18vw, 110px);
   border-radius: 6px;
   border: 1px solid rgba(0, 150, 255, 0.25);
   background: rgba(0, 20, 60, 0.4);
