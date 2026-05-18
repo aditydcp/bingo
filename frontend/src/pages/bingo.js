@@ -99,7 +99,12 @@ export default function BingoPage() {
           }
         }
       })
-      .catch(() => router.replace("/"));
+      .catch((err) => {
+        if (err?.response?.status === 404) {
+          localStorage.removeItem("bingo_user");
+        }
+        router.replace("/");
+      });
   }, []);
 
   const handleCellClick = (pos) => {
