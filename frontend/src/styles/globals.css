@@ -1,0 +1,347 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+:root {
+  --bg-dark: #060d1f;
+  --bg-navy: #0a1628;
+  --bg-blue: #0d2248;
+  --accent: #0066ff;
+  --cyan: #00d4ff;
+  --gold: #f59e0b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg-dark);
+  color: white;
+  min-height: 100vh;
+}
+
+/* ── Background ── */
+.bingo-bg {
+  background: linear-gradient(135deg, #060d1f 0%, #0a1628 40%, #0d2a5e 70%, #0a3a7a 100%);
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.grid-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(0, 150, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 150, 255, 0.07) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* glow orbs */
+.bingo-bg::before {
+  content: '';
+  position: fixed;
+  top: -20%;
+  right: -10%;
+  width: 60vw;
+  height: 60vw;
+  background: radial-gradient(circle, rgba(0, 100, 255, 0.18) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+.bingo-bg::after {
+  content: '';
+  position: fixed;
+  bottom: -20%;
+  left: -10%;
+  width: 50vw;
+  height: 50vw;
+  background: radial-gradient(circle, rgba(0, 200, 255, 0.12) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Cards ── */
+.glass-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(0, 150, 255, 0.3);
+  color: white;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.glass-input:focus {
+  border-color: rgba(0, 200, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(0, 150, 255, 0.15);
+}
+.glass-input option {
+  background: #0a1628;
+  color: white;
+}
+
+/* ── Buttons ── */
+.btn-primary {
+  background: linear-gradient(135deg, #0066ff, #00aaff);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 20px rgba(0, 100, 255, 0.4);
+}
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 28px rgba(0, 100, 255, 0.6);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-finish {
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.5);
+  animation: pulse-gold 2s infinite;
+}
+.btn-finish:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(245, 158, 11, 0.7);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-danger:hover {
+  opacity: 0.9;
+}
+
+/* ── Bingo Grid ── */
+.bingo-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  width: 100%;
+}
+
+.bingo-header-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0066ff, #00aaff);
+  border-radius: 6px;
+  font-size: clamp(14px, 3vw, 22px);
+  font-weight: 900;
+  color: white;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(0, 200, 255, 0.8);
+}
+
+.bingo-cell {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 150, 255, 0.25);
+  background: rgba(0, 20, 60, 0.4);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  backdrop-filter: blur(4px);
+}
+
+.bingo-cell.unmarked:hover {
+  border-color: rgba(0, 200, 255, 0.6);
+  background: rgba(0, 100, 255, 0.15);
+  transform: scale(1.02);
+}
+
+.bingo-cell.marked {
+  border-color: rgba(0, 200, 255, 0.5);
+  background: rgba(0, 50, 120, 0.6);
+  cursor: default;
+}
+
+.bingo-cell.free-cell {
+  background: rgba(15, 50, 120, 0.7);
+  border-color: rgba(245, 158, 11, 0.6);
+  box-shadow: inset 0 0 12px rgba(245, 158, 11, 0.2);
+  cursor: default;
+}
+
+.bingo-cell.winning {
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.7), inset 0 0 12px rgba(245, 158, 11, 0.15);
+  animation: winning-glow 1.5s ease-in-out infinite alternate;
+}
+
+.bingo-cell img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.marked-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 3px;
+  pointer-events: none;
+}
+.marked-overlay span {
+  background: rgba(0, 200, 100, 0.85);
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1;
+  backdrop-filter: blur(4px);
+}
+
+/* ── Bingo Banner ── */
+.bingo-banner {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(239, 68, 68, 0.2));
+  border: 2px solid rgba(245, 158, 11, 0.5);
+  animation: banner-glow 2s ease-in-out infinite alternate;
+}
+
+/* ── Progress Bar ── */
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0066ff, #00d4ff);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+/* ── Spinner ── */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(0, 150, 255, 0.2);
+  border-top-color: #00d4ff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto;
+}
+
+/* ── Admin table ── */
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.admin-table th {
+  background: rgba(0, 100, 255, 0.2);
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #93c5fd;
+  border-bottom: 1px solid rgba(0, 150, 255, 0.2);
+}
+.admin-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 13px;
+  color: #e2e8f0;
+  vertical-align: middle;
+}
+.admin-table tr:hover td {
+  background: rgba(0, 100, 255, 0.07);
+}
+
+/* ── Mini grid (admin) ── */
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+  width: 70px;
+}
+.mini-cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.mini-cell.marked {
+  background: #0066ff;
+}
+.mini-cell.winning {
+  background: #f59e0b;
+}
+.mini-cell.free {
+  background: rgba(245, 158, 11, 0.5);
+}
+
+/* ── Navbar ── */
+.navbar {
+  background: rgba(6, 13, 31, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0, 150, 255, 0.15);
+}
+
+/* ── Badges ── */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.badge-blue { background: rgba(0, 100, 255, 0.25); color: #93c5fd; border: 1px solid rgba(0, 100, 255, 0.3); }
+.badge-green { background: rgba(0, 180, 80, 0.2); color: #4ade80; border: 1px solid rgba(0, 180, 80, 0.3); }
+.badge-gold { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+.badge-gray { background: rgba(100, 100, 120, 0.2); color: #94a3b8; border: 1px solid rgba(100,100,120,0.3); }
+
+/* ── Animations ── */
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes winning-glow {
+  from { box-shadow: 0 0 10px rgba(245, 158, 11, 0.5), inset 0 0 8px rgba(245, 158, 11, 0.1); }
+  to   { box-shadow: 0 0 24px rgba(245, 158, 11, 0.9), inset 0 0 16px rgba(245, 158, 11, 0.25); }
+}
+
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 4px 20px rgba(245, 158, 11, 0.5); }
+  50%       { box-shadow: 0 4px 40px rgba(245, 158, 11, 0.9); }
+}
+
+@keyframes banner-glow {
+  from { box-shadow: 0 0 10px rgba(245, 158, 11, 0.2); }
+  to   { box-shadow: 0 0 30px rgba(245, 158, 11, 0.5); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in { animation: fadeIn 0.4s ease-out; }
