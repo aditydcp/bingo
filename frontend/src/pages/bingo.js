@@ -1,31 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/router";
-import axios from "axios";
 import Head from "next/head";
-
-const API = "";
-const FREE_POS = 12; // center of the 5×5 grid — always FREE
-const LETTERS = ["F", "I", "R", "S", "T"];
-
-function checkBingo(markedSet) {
-  const has = (id) => markedSet.has(id);
-  const lines = [];
-
-  for (let r = 0; r < 5; r++) {
-    const row = [0, 1, 2, 3, 4].map((c) => r * 5 + c);
-    if (row.every(has)) lines.push(row);
-  }
-  for (let c = 0; c < 5; c++) {
-    const col = [0, 1, 2, 3, 4].map((r) => r * 5 + c);
-    if (col.every(has)) lines.push(col);
-  }
-  const diag1 = [0, 6, 12, 18, 24];
-  const diag2 = [4, 8, 12, 16, 20];
-  if (diag1.every(has)) lines.push(diag1);
-  if (diag2.every(has)) lines.push(diag2);
-
-  return lines;
-}
+import {
+  FREE_POS,
+  LETTERS,
+  checkBingo,
+  markedSetFrom,
+  thumb,
+  fullPhoto,
+} from "../lib/bingo";
+import { api, getSession, linkGoogle, supabase } from "../lib/supabase";
+import { compressImage } from "../lib/compressImage";
+import GoogleButton from "../components/GoogleButton";
 
 function loadImg(src) {
   return new Promise((resolve) => {
@@ -85,7 +71,9 @@ export default function BingoPage() {
   const router = useRouter();
   const fileRef = useRef(null);
 
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(null); // { name, entitas }
+  const [isGuest, setIsGuest] = useState(false);
+  const [linkError, setLinkError] = useState("");
   const [board, setBoard] = useState(null); // user's personal 25-cell ordered array
   const [cells, setCells] = useState({}); // keyed by board position (0-24)
   const [winLines, setWinLines] = useState([]);
@@ -107,60 +95,62 @@ export default function BingoPage() {
   const markedCount = markedSet.size;
 
   const recomputeBingo = useCallback((cellMap) => {
-    const ms = new Set(
-      Object.entries(cellMap)
-        .filter(([, v]) => v?.marked)
-        .map(([k]) => Number(k)),
-    );
-    setWinLines(checkBingo(ms));
+    setWinLines(checkBingo(markedSetFrom(cellMap)));
   }, []);
 
   useEffect(() => {
-    const raw = localStorage.getItem("bingo_user");
-    if (!raw) {
-      router.replace("/");
-      return;
+    // Error from a failed "link Google" redirect comes back in the URL hash
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    if (hash.get("error")) {
+      setLinkError(
+        hash.get("error_code") === "identity_already_exists"
+          ? "Akun Google ini sudah dipakai pemain lain. Gunakan akun Google lain."
+          : "Gagal menghubungkan Google. Coba lagi.",
+      );
+      history.replaceState(null, "", window.location.pathname);
     }
-    const u = JSON.parse(raw);
-    setUser(u);
 
-    // Bingo-state returns cells, board, and completion status from the DB
-    axios
-      .get(`${API}/api/bingo-state/${u.userId}`)
-      .then(({ data }) => {
+    (async () => {
+      if (!(await getSession())) {
+        router.replace("/");
+        return;
+      }
+      try {
+        const data = await api("/api/state");
+        setUser(data.profile);
+        setIsGuest(data.isGuest);
         setBoard(data.board);
         const loaded = data.cells || {};
         loaded[FREE_POS] = { ...loaded[FREE_POS], marked: true, isFree: true };
         setCells(loaded);
         recomputeBingo(loaded);
-
-        // DB is authoritative for finish status
         if (data.completion) {
           setFinished(true);
           setFinishTime(data.completion.completedAt);
-          localStorage.setItem(
-            `bingo_finish_${u.userId}`,
-            JSON.stringify({ time: data.completion.completedAt }),
-          );
-        } else {
-          // Fallback to localStorage (fast path, offline)
-          const fd = localStorage.getItem(`bingo_finish_${u.userId}`);
-          if (fd) {
-            try {
-              const { time } = JSON.parse(fd);
-              setFinished(true);
-              setFinishTime(time);
-            } catch {}
-          }
         }
-      })
-      .catch((err) => {
-        if (err?.response?.status === 404) {
-          localStorage.removeItem("bingo_user");
-        }
+      } catch {
         router.replace("/");
-      });
+      }
+    })();
   }, []);
+
+  const handleSignOut = async () => {
+    if (
+      isGuest &&
+      !confirm(
+        "Kamu bermain sebagai tamu. Jika keluar, progres tidak bisa dipulihkan. Tetap keluar?",
+      )
+    )
+      return;
+    await supabase().auth.signOut();
+    router.replace("/");
+  };
+
+  const handleLinkGoogle = async () => {
+    setLinkError("");
+    const { error } = await linkGoogle("/bingo");
+    if (error) setLinkError("Gagal menghubungkan Google. Coba lagi.");
+  };
 
   const downloadBingoCard = async () => {
     setDownloading(true);
@@ -250,7 +240,7 @@ export default function BingoPage() {
       await Promise.all(
         Object.entries(cells).map(async ([pos, state]) => {
           if (state?.photoUrl) {
-            const img = await loadImg(state.photoUrl);
+            const img = await loadImg(thumb(state.photoUrl, 400));
             if (img) photoImgs[pos] = img;
           }
         }),
@@ -386,21 +376,29 @@ export default function BingoPage() {
     if (!file || selectedCell === null) return;
     setUploading(true);
     try {
+      // compress on the phone → signed direct upload to Cloudinary → record on our API
+      const [photo, sig] = await Promise.all([
+        compressImage(file),
+        api("/api/upload-signature", { method: "POST", body: { position: selectedCell } }),
+      ]);
       const fd = new FormData();
-      fd.append("photo", file);
-      const { data } = await axios.post(
-        `${API}/api/upload/${user.userId}/${selectedCell}`,
-        fd,
-        { headers: { "Content-Type": "multipart/form-data" } },
-      );
-      const updated = {
-        ...cells,
-        [selectedCell]: {
-          marked: true,
-          photoUrl: data.photoUrl,
-          markedAt: new Date().toISOString(),
+      fd.append("file", photo);
+      fd.append("api_key", sig.apiKey);
+      fd.append("timestamp", sig.timestamp);
+      fd.append("public_id", sig.publicId);
+      fd.append("signature", sig.signature);
+      const uploadRes = await fetch(sig.uploadUrl, { method: "POST", body: fd });
+      if (!uploadRes.ok) throw new Error("cloudinary upload failed");
+      const uploaded = await uploadRes.json();
+      const { cell } = await api("/api/cells", {
+        method: "POST",
+        body: {
+          position: selectedCell,
+          photoUrl: uploaded.secure_url,
+          publicId: uploaded.public_id,
         },
-      };
+      });
+      const updated = { ...cells, [selectedCell]: cell };
       setCells(updated);
       recomputeBingo(updated);
     } catch {
@@ -414,15 +412,9 @@ export default function BingoPage() {
 
   const handleFinishConfirm = async () => {
     try {
-      const { data } = await axios.post(`${API}/api/finish`, {
-        userId: user.userId,
-      });
+      const data = await api("/api/finish", { method: "POST" });
       setFinished(true);
       setFinishTime(data.completedAt);
-      localStorage.setItem(
-        `bingo_finish_${user.userId}`,
-        JSON.stringify({ time: data.completedAt }),
-      );
       setShowFinishModal(false);
     } catch {
       alert("Gagal menyimpan. Coba lagi.");
@@ -465,18 +457,32 @@ export default function BingoPage() {
               <p className="text-blue-400 text-[10px]">{user.entitas}</p>
             </div>
             <button
-              onClick={() => {
-                localStorage.removeItem("bingo_user");
-                router.push("/");
-              }}
-              className="text-blue-400 hover:text-white text-xs transition-colors hidden"
+              onClick={handleSignOut}
+              className="text-blue-400 hover:text-white text-xs transition-colors px-2 py-1"
             >
-              Ganti
+              Keluar
             </button>
           </div>
         </nav>
 
         <div className="relative z-10 px-3 pb-8 max-w-xl mx-auto">
+          {/* Guest → Google upgrade */}
+          {isGuest && (
+            <div className="glass-card rounded-xl p-3 mt-3 border border-yellow-500/30">
+              <p className="text-yellow-200 text-xs mb-2">
+                Kamu bermain sebagai tamu — progres hanya tersimpan di perangkat
+                ini. Hubungkan Google agar progres aman dan bisa dibuka di
+                perangkat lain.
+              </p>
+              <GoogleButton onClick={handleLinkGoogle} label="Simpan progres dengan Google" />
+            </div>
+          )}
+          {linkError && (
+            <div className="mt-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">
+              {linkError}
+            </div>
+          )}
+
           {/* Bingo banner */}
           {hasBingo && (
             <div className="bingo-banner rounded-xl p-3 my-3 text-center fade-in">
@@ -533,7 +539,7 @@ export default function BingoPage() {
                   {hasPhoto ? (
                     <>
                       <img
-                        src={`${API}${state.photoUrl}`}
+                        src={thumb(state.photoUrl)}
                         alt="cell"
                         className="absolute inset-0 w-full h-full object-cover"
                       />
@@ -694,7 +700,7 @@ export default function BingoPage() {
             >
               <div className="glass-card rounded-2xl overflow-hidden">
                 <img
-                  src={`${API}${cells[previewCell]?.photoUrl}`}
+                  src={fullPhoto(cells[previewCell]?.photoUrl)}
                   alt="Cell photo"
                   className="w-full"
                 />

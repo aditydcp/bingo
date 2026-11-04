@@ -1,23 +1,31 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
 import Head from "next/head";
 import Link from "next/link";
+import { api } from "../lib/supabase";
+import AdminGate from "../components/AdminGate";
 
-const API = "";
-const FREE_CELL = 12;
-const LETTERS = ["F", "I", "R", "S", "T"];
+const isFreeCell = (cell) => cell.label === "FREE";
 
 export default function MasterPage() {
+  return (
+    <AdminGate>
+      <MasterPanel />
+    </AdminGate>
+  );
+}
+
+// Edits labels of the master cell pool; each player's board is 24 random pool cells + FREE
+function MasterPanel() {
   const [cells, setCells] = useState([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [selectedCell, setSelectedCell] = useState(null);
 
   useEffect(() => {
-    axios.get(`${API}/api/master/config`).then(({ data }) => {
-      setCells(data.cells || []);
-    });
+    api("/api/admin/config").then((data) => setCells(data.cells || []));
   }, []);
+
+  const selected = cells.find((c) => c.id === selectedCell);
 
   const updateLabel = (id, value) => {
     setCells((prev) =>
@@ -29,7 +37,7 @@ export default function MasterPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await axios.post(`${API}/api/master/config`, { cells });
+      await api("/api/admin/config", { method: "PUT", body: { cells } });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch {
@@ -37,41 +45,6 @@ export default function MasterPage() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const resetToDefault = () => {
-    if (!confirm("Reset semua label ke default?")) return;
-    const defaults = [
-      "Foto di area registrasi",
-      "Follow Instagram IDSurvey",
-      "Scan QR code agenda",
-      "Berkenalan dengan peserta baru",
-      "Selfie dengan pembicara",
-      "Ajukan pertanyaan di sesi",
-      "Kunjungi booth Finance",
-      "Foto dengan tim IDSurvey",
-      "Kunjungi booth IT",
-      "Isi survei kepuasan",
-      "Kunjungi booth Risk Mgt",
-      "Ikut workshop / breakout",
-      "FREE",
-      "Kunjungi booth Sustainability",
-      "Kunjungi booth TJSL",
-      "Foto di photobooth resmi",
-      "Tukar merchandise",
-      "Ikut live demo produk",
-      "Ambil goodie bag",
-      "Share di LinkedIn / IG",
-      "Networking sesi makan siang",
-      "Review acara di Google",
-      "Foto panorama venue",
-      "Kumpulkan 3 kartu nama",
-      "Dokumentasi momen terbaik",
-    ];
-    setCells((prev) =>
-      prev.map((c, i) => ({ ...c, label: defaults[i] || c.label })),
-    );
-    setSaved(false);
   };
 
   return (
@@ -95,7 +68,7 @@ export default function MasterPage() {
           </div>
           <div className="flex items-center gap-2">
             <Link
-              href="/admin-one-only"
+              href="/admin"
               className="text-xs text-blue-300 hover:text-white px-3 py-1.5 glass-card rounded-lg transition-colors"
             >
               Admin View
@@ -110,14 +83,15 @@ export default function MasterPage() {
               Bingo Master Panel
             </h1>
             <p className="text-blue-300 text-sm mt-1">
-              Edit label setiap sel bingo. Klik sel untuk mengedit.
+              Edit label sel. Setiap peserta mendapat 24 sel acak dari pool ini
+              + FREE di tengah. Perubahan label langsung berlaku di semua papan.
             </p>
           </div>
 
           {/* Quick info */}
           <div className="grid grid-cols-3 gap-3 mb-6">
             {[
-              { label: "Total Sel", value: "25", icon: "🎯" },
+              { label: "Sel di Pool", value: String(cells.length), icon: "🎯" },
               { label: "Baris / Kolom", value: "5×5", icon: "📋" },
               { label: "Sel FREE", value: "Tengah", icon: "⭐" },
             ].map((s) => (
@@ -137,34 +111,14 @@ export default function MasterPage() {
             <div className="glass-card rounded-2xl p-4 mb-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-white font-semibold text-sm">
-                  Grid Editor
+                  Pool Sel
                 </h2>
-                <div className="flex gap-2">
-                  <button
-                    onClick={resetToDefault}
-                    className="text-xs text-blue-300 hover:text-white px-3 py-1.5 glass-card rounded-lg transition-colors"
-                  >
-                    Reset Default
-                  </button>
-                </div>
-              </div>
-
-              {/* Header row */}
-              <div className="grid grid-cols-5 gap-2 mb-2">
-                {LETTERS.map((l) => (
-                  <div
-                    key={l}
-                    className="bingo-header-cell h-8 rounded-md text-sm"
-                  >
-                    {l}
-                  </div>
-                ))}
               </div>
 
               {/* Cell grid */}
               <div className="grid grid-cols-5 gap-2">
                 {cells.map((cell) => {
-                  const isFree = cell.id === FREE_CELL;
+                  const isFree = isFreeCell(cell);
                   const isSelected = selectedCell === cell.id;
                   return (
                     <div
@@ -213,10 +167,6 @@ export default function MasterPage() {
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-white font-semibold text-sm">
                   Edit Sel #{selectedCell + 1}
-                  <span className="ml-2 text-xs text-blue-400">
-                    ({LETTERS[Math.floor(selectedCell / 5)]}
-                    {(selectedCell % 5) + 1})
-                  </span>
                 </h2>
                 <button
                   onClick={() => setSelectedCell(null)}
@@ -226,7 +176,7 @@ export default function MasterPage() {
                 </button>
               </div>
               <textarea
-                value={cells[selectedCell]?.label || ""}
+                value={selected?.label || ""}
                 onChange={(e) => updateLabel(selectedCell, e.target.value)}
                 className="w-full glass-input rounded-xl px-4 py-3 text-white text-sm resize-none"
                 rows={3}
@@ -234,7 +184,7 @@ export default function MasterPage() {
                 maxLength={80}
               />
               <p className="text-blue-400/50 text-xs mt-1 text-right">
-                {cells[selectedCell]?.label?.length || 0}/80
+                {selected?.label?.length || 0}/80
               </p>
             </div>
           )}
@@ -246,7 +196,7 @@ export default function MasterPage() {
             </h2>
             <div className="space-y-2">
               {cells.map((cell) => {
-                const isFree = cell.id === FREE_CELL;
+                const isFree = isFreeCell(cell);
                 return (
                   <div key={cell.id} className="flex items-start gap-3">
                     <div

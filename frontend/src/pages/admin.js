@@ -1,45 +1,20 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
 import Head from "next/head";
 import Link from "next/link";
-
-const API = "";
-const FREE_POS = 12;
-const LETTERS = ["F", "I", "R", "S", "T"];
-
-function checkBingo(markedSet) {
-  const has = (id) => markedSet.has(id);
-  const lines = [];
-  for (let r = 0; r < 5; r++) {
-    const row = [0, 1, 2, 3, 4].map((c) => r * 5 + c);
-    if (row.every(has)) lines.push(row);
-  }
-  for (let c = 0; c < 5; c++) {
-    const col = [0, 1, 2, 3, 4].map((r) => r * 5 + c);
-    if (col.every(has)) lines.push(col);
-  }
-  if ([0, 6, 12, 18, 24].every(has)) lines.push([0, 6, 12, 18, 24]);
-  if ([4, 8, 12, 16, 20].every(has)) lines.push([4, 8, 12, 16, 20]);
-  return lines;
-}
-
-// Build ordered board array from a positions array + master cell map
-function buildBoard(positions, cellById) {
-  if (!positions) return [];
-  return positions.map((cellId, pos) => ({
-    id: pos,
-    cellId,
-    label: cellById[cellId]?.label || "",
-  }));
-}
+import {
+  FREE_POS,
+  LETTERS,
+  checkBingo,
+  markedSetFrom,
+  buildBoard,
+  thumb,
+  fullPhoto,
+} from "../lib/bingo";
+import { api } from "../lib/supabase";
+import AdminGate from "../components/AdminGate";
 
 function MiniGrid({ cellStates }) {
-  const markedSet = new Set(
-    Object.entries(cellStates || {})
-      .filter(([, v]) => v?.marked)
-      .map(([k]) => Number(k)),
-  );
-  markedSet.add(FREE_POS);
+  const markedSet = markedSetFrom(cellStates);
   const winSet = new Set(checkBingo(markedSet).flat());
 
   return (
@@ -99,16 +74,12 @@ function PhotoPopup({ photo, onClose }) {
   );
 }
 
-function UserBingoModal({ user, state, board, onClose }) {
+function UserBingoModal({ user, state, board, onClose, onReset }) {
   const [previewPhoto, setPreviewPhoto] = useState(null);
+  const [resetting, setResetting] = useState(false);
 
   const cellMap = state?.cells || {};
-  const markedSet = new Set(
-    Object.entries(cellMap)
-      .filter(([, v]) => v?.marked)
-      .map(([k]) => Number(k)),
-  );
-  markedSet.add(FREE_POS);
+  const markedSet = markedSetFrom(cellMap);
   const winLines = checkBingo(markedSet);
   const winSet = new Set(winLines.flat());
 
@@ -128,6 +99,14 @@ function UserBingoModal({ user, state, board, onClose }) {
               <div>
                 <h2 className="text-white font-bold text-lg">{user.name}</h2>
                 <span className="badge badge-blue mt-1">{user.entitas}</span>
+                {user.isGuest && (
+                  <span className="badge badge-gray mt-1 ml-1">Tamu</span>
+                )}
+                {user.email && (
+                  <p className="text-blue-400/70 text-[11px] mt-1 break-all">
+                    {user.email}
+                  </p>
+                )}
               </div>
               <button
                 onClick={onClose}
@@ -205,7 +184,7 @@ function UserBingoModal({ user, state, board, onClose }) {
                       hasPhoto
                         ? () =>
                             setPreviewPhoto({
-                              photoUrl: `${API}${cs.photoUrl}`,
+                              photoUrl: fullPhoto(cs.photoUrl),
                               label: cell.label,
                               markedAt: cs.markedAt,
                             })
@@ -215,8 +194,9 @@ function UserBingoModal({ user, state, board, onClose }) {
                     {hasPhoto ? (
                       <>
                         <img
-                          src={`${API}${cs.photoUrl}`}
+                          src={thumb(cs.photoUrl, 160)}
                           alt=""
+                          loading="lazy"
                           className="absolute inset-0 w-full h-full object-cover"
                         />
                         {/* Camera icon hint */}
@@ -264,10 +244,30 @@ function UserBingoModal({ user, state, board, onClose }) {
             )}
           </div>
 
-          <div className="px-5 pb-5">
+          <div className="px-5 pb-5 flex gap-2">
+            <button
+              onClick={async () => {
+                if (
+                  !confirm(
+                    `Reset bingo ${user.name}? Semua foto, status finish, dan papan akan dihapus.`,
+                  )
+                )
+                  return;
+                setResetting(true);
+                try {
+                  await onReset();
+                } finally {
+                  setResetting(false);
+                }
+              }}
+              disabled={resetting}
+              className="btn-danger rounded-xl px-4 py-2.5 text-white text-sm"
+            >
+              {resetting ? "Mereset..." : "Reset"}
+            </button>
             <button
               onClick={onClose}
-              className="w-full glass-card rounded-xl py-2.5 text-blue-200 text-sm hover:text-white transition-colors"
+              className="flex-1 glass-card rounded-xl py-2.5 text-blue-200 text-sm hover:text-white transition-colors"
             >
               Tutup
             </button>
@@ -287,8 +287,15 @@ function UserBingoModal({ user, state, board, onClose }) {
 }
 
 export default function AdminPage() {
+  return (
+    <AdminGate>
+      <AdminDashboard />
+    </AdminGate>
+  );
+}
+
+function AdminDashboard() {
   const [data, setData] = useState(null);
-  const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
@@ -297,12 +304,7 @@ export default function AdminPage() {
 
   const loadData = async () => {
     try {
-      const [overviewRes, configRes] = await Promise.all([
-        axios.get(`${API}/api/admin/overview`),
-        axios.get(`${API}/api/master/config`),
-      ]);
-      setData(overviewRes.data);
-      setConfig(configRes.data);
+      setData(await api("/api/admin/overview"));
       setLastRefresh(new Date());
     } catch {
       alert("Gagal memuat data.");
@@ -329,13 +331,17 @@ export default function AdminPage() {
     );
   }
 
-  const { users, states, boards, completions, masterCells } = data;
+  if (!data) {
+    return (
+      <div className="bingo-bg min-h-screen flex items-center justify-center">
+        <button onClick={loadData} className="relative z-10 glass-card rounded-xl px-4 py-2 text-blue-200 text-sm">
+          Gagal memuat data. Coba lagi
+        </button>
+      </div>
+    );
+  }
 
-  // Build a lookup map: cell ID → cell object
-  const cellById = {};
-  (masterCells || config?.cells || []).forEach((c) => {
-    cellById[c.id] = c;
-  });
+  const { users, states, boards, completions, masterCells } = data;
 
   const completionMap = {};
   completions.forEach((c) => {
@@ -348,14 +354,9 @@ export default function AdminPage() {
     const matchSearch =
       !q ||
       u.name.toLowerCase().includes(q) ||
-      u.entitas.toLowerCase().includes(q);
-    const ms = new Set(
-      Object.entries(states[u.id]?.cells || {})
-        .filter(([, v]) => v?.marked)
-        .map(([k]) => Number(k)),
-    );
-    ms.add(FREE_POS);
-    const hasBingo = checkBingo(ms).length > 0;
+      u.entitas.toLowerCase().includes(q) ||
+      (u.email || "").toLowerCase().includes(q);
+    const hasBingo = checkBingo(markedSetFrom(states[u.id]?.cells)).length > 0;
     const isFinished = !!completionMap[u.id];
     if (tab === "bingo") return matchSearch && hasBingo;
     if (tab === "finished") return matchSearch && isFinished;
@@ -377,23 +378,20 @@ export default function AdminPage() {
     return msB - msA;
   });
 
-  const totalBingo = allUsers.filter((u) => {
-    const ms = new Set(
-      Object.entries(states[u.id]?.cells || {})
-        .filter(([, v]) => v?.marked)
-        .map(([k]) => Number(k)),
-    );
-    ms.add(FREE_POS);
-    return checkBingo(ms).length > 0;
-  }).length;
+  const totalBingo = allUsers.filter(
+    (u) => checkBingo(markedSetFrom(states[u.id]?.cells)).length > 0,
+  ).length;
 
-  // Reconstruct the viewed user's personal board
+  // Reconstruct the viewed user's personal board (none yet if they never opened it)
   const viewUserBoard = viewUser
-    ? buildBoard(
-        boards[viewUser.id] || Array.from({ length: 25 }, (_, i) => i),
-        cellById,
-      )
+    ? buildBoard(boards[viewUser.id], masterCells)
     : null;
+
+  const resetUser = async (userId) => {
+    await api(`/api/admin/users/${userId}`, { method: "DELETE" });
+    setViewUser(null);
+    await loadData();
+  };
 
   return (
     <>
@@ -418,7 +416,7 @@ export default function AdminPage() {
           </div>
           <div className="flex items-center gap-2">
             <Link
-              href="/master-admin-gweh"
+              href="/master"
               className="text-xs text-blue-300 hover:text-white px-3 py-1.5 glass-card rounded-lg transition-colors"
             >
               Master Panel
@@ -538,7 +536,7 @@ export default function AdminPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari nama atau entitas..."
+              placeholder="Cari nama, entitas, atau email..."
               className="glass-input rounded-xl px-4 py-2.5 text-white text-sm flex-1"
             />
             <div className="flex gap-1 glass-card rounded-xl p-1">
@@ -586,12 +584,7 @@ export default function AdminPage() {
                   <tbody>
                     {filteredUsers.map((u, i) => {
                       const st = states[u.id]?.cells || {};
-                      const markedSet = new Set(
-                        Object.entries(st)
-                          .filter(([, v]) => v?.marked)
-                          .map(([k]) => Number(k)),
-                      );
-                      markedSet.add(FREE_POS);
+                      const markedSet = markedSetFrom(st);
                       const bingoLines = checkBingo(markedSet);
                       const hasBingo = bingoLines.length > 0;
                       const finished = !!completionMap[u.id];
@@ -704,6 +697,7 @@ export default function AdminPage() {
             state={states[viewUser.id]}
             board={viewUserBoard}
             onClose={() => setViewUser(null)}
+            onReset={() => resetUser(viewUser.id)}
           />
         )}
       </div>

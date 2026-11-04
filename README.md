@@ -1,62 +1,64 @@
 # IDSurvey FIRST Summit '26 — Bingo App
 
-## Cara Menjalankan
+Mobile-first photo bingo. Players sign in with Google (or as a guest), get a random 5×5 board (F-I-R-S-T), and fill cells by taking photos. Runs entirely on free tiers:
 
-### 1. Install dependencies & jalankan sekaligus
-```bash
-chmod +x start.sh
-./start.sh
+| Part | Service |
+|---|---|
+| Web app + API routes | Vercel (Next.js) |
+| Database + login (Google, guest) | Supabase |
+| Photos | Cloudinary |
+
+## Pages
+
+| Page | URL |
+|---|---|
+| Sign in / register | `/` |
+| Player board | `/bingo` |
+| Admin dashboard | `/admin` |
+| Master panel (edit cell labels) | `/master` |
+
+## Setup
+
+### 1. Supabase
+
+1. Create a project at supabase.com.
+2. **SQL Editor** → run [`supabase/schema.sql`](supabase/schema.sql).
+3. **Authentication → Sign In / Providers**:
+   - Enable **Allow anonymous sign-ins** (guest mode).
+   - Enable **Allow manual linking** (lets guests upgrade to Google and keep progress).
+   - Enable **Google** with a Client ID/secret from Google Cloud Console (APIs & Services → Credentials → OAuth client ID, type "Web application"). Add `https://<project-ref>.supabase.co/auth/v1/callback` as an authorized redirect URI.
+4. **Authentication → URL Configuration**: set **Site URL** to your Vercel URL and add `http://localhost:3000/**` and `https://<your-app>.vercel.app/**` to **Redirect URLs**.
+5. **Authentication → Rate Limits**: raise the anonymous sign-in limit (default 30/hour per IP). Everyone on the venue Wi-Fi shares one IP.
+
+### 2. Cloudinary
+
+Create a free account and copy the cloud name, API key and API secret from **Settings → API Keys**.
+
+### 3. Vercel
+
+1. Import this repo and set **Root Directory** to `frontend`.
+2. Add the environment variables from [`frontend/.env.example`](frontend/.env.example).
+3. Deploy.
+
+### 4. First admin
+
+Sign in with Google once (e.g. at `/admin`), then in the Supabase SQL editor:
+
+```sql
+insert into admins (user_id) select id from auth.users where email = 'you@example.com';
 ```
 
-### 2. Atau jalankan manual (dua terminal)
+## Local development
 
-**Terminal 1 — Backend:**
-```bash
-cd backend
-npm install
-npm run dev   # or: node server.js
-```
-
-**Terminal 2 — Frontend:**
 ```bash
 cd frontend
+cp .env.example .env.local   # fill in values
 npm install
-npm run dev
+npm run dev                  # http://localhost:3000
 ```
 
-## URL
+## Free-tier notes
 
-| Halaman | URL |
-|---|---|
-| User Bingo | http://localhost:3000 |
-| Master Panel | http://localhost:3000/master |
-| Admin Dashboard | http://localhost:3000/admin |
-| Backend API | http://localhost:3001 |
-
-## Fitur
-
-- Registrasi nama + entitas (dropdown: ID Survey, Sucofindo, Surveyor Indonesia, BKI)
-- Data tersimpan di localStorage — saat buka ulang langsung masuk ke board
-- Bingo 5×5 dengan header F-I-R-S-T
-- Setiap sel bisa diisi foto (tap/klik untuk upload kamera/galeri)
-- Foto menggantikan tampilan sel, dengan tanda centang
-- Deteksi bingo otomatis (baris, kolom, diagonal)
-- Tombol **FINISH** muncul saat bingo, menyimpan timestamp selesai
-- Preview foto saat tap sel yang sudah diisi
-- **Master Panel** (`/master`): edit label semua sel, simpan ke server
-- **Admin Dashboard** (`/admin`):
-  - Statistik total peserta, yang dapat bingo, yang sudah finish
-  - Tabel semua peserta + mini bingo board + progress bar
-  - Ranking pemenang dengan waktu finish
-  - Klik "Lihat" untuk melihat bingo board lengkap beserta foto tiap sel
-  - Auto-refresh setiap 30 detik
-
-## Data Storage
-
-Data tersimpan di `backend/data/`:
-- `users.json` — data peserta
-- `states.json` — status bingo tiap peserta
-- `master.json` — konfigurasi label sel
-- `completions.json` — data peserta yang menyelesaikan bingo
-
-Foto tersimpan di `backend/uploads/`.
+- Supabase pauses projects after 7 days without activity — open the app (or the dashboard) shortly before the event.
+- Photos are resized on the phone to ≤1280 px JPEG (~200 KB) before upload, so 34 players × 25 photos is roughly 170 MB.
+- Guest progress lives in that browser's session only, until the guest links Google from the board page.

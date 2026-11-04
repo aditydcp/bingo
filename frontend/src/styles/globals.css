@@ -22,6 +22,7 @@ body {
   background: var(--bg-dark);
   color: white;
   min-height: 100vh;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* ── Background ── */

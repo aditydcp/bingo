@@ -1,0 +1,12 @@
+{
+  "name": "IDSurvey FIRST Summit Bingo",
+  "short_name": "FIRST Bingo",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#060d1f",
+  "theme_color": "#060d1f",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
