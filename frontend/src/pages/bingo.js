@@ -14,6 +14,7 @@ import {
 import { api, getSession, linkGoogle, supabase, sleep } from "../lib/supabase";
 import { compressImage } from "../lib/compressImage";
 import { renderBoardImage, formatTime } from "../lib/boardImage";
+import { feedback, useFeedback } from "../lib/feedback";
 import {
   backoff,
   isPermanent,
@@ -23,6 +24,7 @@ import {
 } from "../lib/uploadQueue";
 import GoogleButton from "../components/GoogleButton";
 import Celebration from "../components/Celebration";
+import FeedbackToggles from "../components/FeedbackToggles";
 import Logo from "../components/Logo";
 
 const ERROR_TEXT = {
@@ -64,6 +66,7 @@ export default function BingoPage() {
   const [online, setOnline] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [rerolling, setRerolling] = useState(false);
+  const [feedbackSettings, toggleFeedback] = useFeedback();
   const [previewCell, setPreviewCell] = useState(null);
   const [downloading, setDownloading] = useState(false);
   const [celebration, setCelebration] = useState(null); // { kind, lines }
@@ -198,6 +201,7 @@ export default function BingoPage() {
             if (!err.aborted) {
               dropFromQueue(item);
               setNotice(ERROR_TEXT[err.message] || "Foto gagal dikirim. Coba ambil ulang.");
+              feedback("error");
             }
             continue;
           }
@@ -216,7 +220,7 @@ export default function BingoPage() {
     cellsRef.current = after;
     setCells(after);
     setRecords(data.records);
-    celebrate(before, after);
+    if (!celebrate(before, after)) feedback("success");
   };
 
   useEffect(() => {
@@ -267,6 +271,7 @@ export default function BingoPage() {
       )
     )
       return;
+    feedback("reroll");
     setRerolling(true);
     try {
       const data = await api("/api/reroll", { method: "POST", timeout: 30000 });
@@ -277,7 +282,9 @@ export default function BingoPage() {
       setBoard(data.board);
       setRound(data.round);
       setCells(cellsRef.current);
+      feedback("success");
     } catch {
+      feedback("error");
       alert(
         navigator.onLine
           ? "Gagal mengacak ulang papan. Coba lagi."
@@ -312,9 +319,11 @@ export default function BingoPage() {
 
   const openCamera = (pos) => {
     if (!canUpload) {
+      feedback("error");
       setNotice(ERROR_TEXT[status === "before" ? "event_not_started" : "event_closed"]);
       return;
     }
+    feedback("tap");
     setSelectedCell(pos);
     fileRef.current?.click();
   };
@@ -330,6 +339,7 @@ export default function BingoPage() {
       return;
     }
     if (cells[pos]?.photoUrl) {
+      feedback("tap");
       setPreviewCell(pos);
       return;
     }
@@ -405,18 +415,21 @@ export default function BingoPage() {
         {/* Navbar */}
         <nav className="navbar relative z-10 px-4 py-3 flex items-center justify-between">
           <Logo />
-          <div className="flex items-center gap-3">
-            <span className="badge badge-gold max-w-[9rem] truncate">{user.name}</span>
-            <button
-              onClick={handleSignOut}
-              className="text-slate-400 hover:text-slate-900 text-xs transition-colors px-2 py-1"
-            >
-              Keluar
-            </button>
-          </div>
+          <button
+            onClick={handleSignOut}
+            className="text-slate-400 hover:text-slate-900 text-xs transition-colors px-2 py-1"
+          >
+            Keluar
+          </button>
         </nav>
 
         <div className="relative z-10 px-3 pb-8 max-w-xl mx-auto">
+          {/* Player + sound / vibration / music toggles */}
+          <div className="flex items-center justify-between gap-2 mt-3">
+            <span className="badge badge-gold max-w-[40%] truncate">{user.name}</span>
+            <FeedbackToggles settings={feedbackSettings} toggle={toggleFeedback} />
+          </div>
+
           {/* Event window */}
           {status === "before" && (
             <div className="glass-card rounded-xl p-3 mt-3 text-center border border-orange-200">

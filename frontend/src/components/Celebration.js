@@ -1,11 +1,13 @@
 import { useEffect } from "react";
 import confetti from "canvas-confetti";
+import { feedback } from "../lib/feedback";
 
 // Full-screen ceremony (kind "bingo" | "full") or a small banner for an extra line (kind "line")
 export default function Celebration({ kind, lines, onClose }) {
   const big = kind !== "line";
 
   useEffect(() => {
+    feedback(kind);
     if (!big) {
       confetti({ particleCount: 60, spread: 70, origin: { y: 0.3 }, zIndex: 70 });
       const t = setTimeout(onClose, 3500);
@@ -21,7 +23,6 @@ export default function Celebration({ kind, lines, onClose }) {
     };
     confetti({ particleCount: 160, spread: 100, origin: { y: 0.6 }, colors, zIndex: 70 });
     burst();
-    navigator.vibrate?.([120, 60, 120, 60, 240]);
     return () => cancelAnimationFrame(frame);
   }, [kind]);
 

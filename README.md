@@ -13,6 +13,7 @@ Mobile-first photo bingo. Players sign in with Google (or as a guest), get a ran
 1. **Board.** Each player gets 25 cells: 24 picked at random from the master pool, plus **GARUT** (free, always marked) in the dead centre.
 2. **Photos.** Tapping a cell opens the camera. The photo is compressed on the phone and uploaded to Cloudinary for that cell. Tapping a filled cell shows the photo and lets the player replace it.
    - **Bad signal:** photos are kept on the phone and sent in the background, retrying automatically and resuming when the signal returns, even after a reload. The player can keep playing meanwhile. A photo counts (and its time is recorded) when it reaches the server. Tapping a waiting photo cancels it.
+   - **Sound, vibration and music** each have an on/off button on the board (vibration only on phones that support it, i.e. not iPhones). Music is off by default.
 3. **Bingo.** A completed row, column or diagonal is a Bingo. The first Bingo and a full board each trigger a full-screen confetti ceremony; every additional line shows a small banner.
 4. **Reroll.** "Acak Ulang Papan" deals a fresh random board and clears the current marks. It's allowed any time, as often as the player wants. Photos are never deleted, and records already earned are kept.
 5. **Records** are automatic (there is no Finish button):

@@ -44,6 +44,8 @@ Game rules as the organizer defined them are summarized in `README.md` → "Game
 4. `POST /api/cells` re-checks the window (2-min grace after the end), validates the URL/public_id belongs to that user + cell (`isOwnUpload`), stores it, then calls `updateRecords`.
 Display uses Cloudinary URL transforms (`thumb`, `fullPhoto` in `src/lib/bingo.js`) rather than `next/image`.
 
+**Sound, vibration, music** (`src/lib/feedback.js`, toggles in `components/FeedbackToggles.js`): all synthesized with Web Audio, no audio files. Call `feedback(name)` for a game moment (sound + vibration); each channel has its own per-device setting in localStorage. Audio unlocks on the first tap (browser autoplay rules); music stops while the tab is hidden.
+
 **Records** (`records` table; `computeRecords` / `lineTimes` in `src/lib/bingo.js`, `updateRecords` in `src/lib/server/game.js`) are derived, not user-submitted. A completed line's time is the latest `markedAt` among its photo cells; first Bingo = the earliest such line, full board = latest `markedAt` once all 24 are filled. So replacing a photo in a winning line moves the record later. `updateRecords` only overwrites a record whose `*_round` equals the current board round; records from rerolled-away boards are final. Each record stores a snapshot `{ round, board, cells, lines }`.
 
 **Shared logic**: `checkBingo`, `LINES`, `markedSetFrom`, `cellsToLine`, `eventStatus` in `src/lib/bingo.js` are used by both pages and API routes. `src/lib/boardImage.js` renders a board to PNG (player's downloadable card and admin export). The admin photo export (`src/lib/exportPhotos.js`) builds the ZIP in the browser from `GET /api/admin/export`, since the archive is too large for a Vercel function response.

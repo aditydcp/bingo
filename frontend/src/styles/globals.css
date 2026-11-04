@@ -235,6 +235,32 @@ body {
   z-index: 5;
 }
 
+/* ── Sound / vibration / music toggles ── */
+.toggle-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 2px solid var(--line);
+  background: #ffffff;
+  font-size: 13px;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+.toggle-chip.on {
+  border-color: #ffc9a8;
+  background: #fff3e8;
+  color: #c2410c;
+}
+.toggle-chip.off {
+  color: #94a3b8;
+  opacity: 0.75;
+}
+.toggle-chip.off span:first-child {
+  filter: grayscale(1);
+  text-decoration: line-through;
+}
+
 /* ── Bingo Banner ── */
 .bingo-banner {
   background: linear-gradient(135deg, #fff4cc, #ffe3d3);
