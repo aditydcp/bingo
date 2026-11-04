@@ -112,7 +112,7 @@ insert into master_config (id, cells) values (1, '[
   {"id": 6,  "label": "Selfie bersama Pak Yudi", "rule": "always"},
   {"id": 7,  "label": "Foto bersama banner Piknik DTI Garut 2026"},
   {"id": 8,  "label": "Foto makanan di acara"},
-  {"id": 9,  "label": "Foto di wahana di Antapura D\'Jati"},
+  {"id": 9,  "label": "Foto di wahana di Antapura DJati"},
   {"id": 10, "label": "Foto bersama teman di dalam bus"},
   {"id": 11, "label": "Foto dengan mobil jeep"},
   {"id": 12, "label": "GARUT", "free": true},
