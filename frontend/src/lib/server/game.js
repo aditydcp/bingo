@@ -96,7 +96,8 @@ export async function requireProfile(userId) {
 }
 
 export function parsePosition(value) {
-  const pos = Number(value);
+  // Number(null), Number("") and Number(false) are all 0, so only accept numbers / digit strings
+  const pos = /^\d+$/.test(String(value)) ? Number(value) : NaN;
   if (!Number.isInteger(pos) || pos < 0 || pos > 24 || pos === FREE_POS) {
     throw new HttpError(400, "invalid position");
   }
