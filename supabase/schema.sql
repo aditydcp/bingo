@@ -109,7 +109,7 @@ insert into master_config (id, cells) values (1, '[
   {"id": 3,  "label": "Cari orang brewok di acara"},
   {"id": 4,  "label": "Foto dengan orang yang memakai kacamata hitam di acara"},
   {"id": 5,  "label": "Fashion Show"},
-  {"id": 6,  "label": "Selfie bersama Pak Yudi"},
+  {"id": 6,  "label": "Selfie bersama Pak Yudi", "rule": "always"},
   {"id": 7,  "label": "Foto bersama banner Piknik DTI Garut 2026"},
   {"id": 8,  "label": "Foto makanan di acara"},
   {"id": 9,  "label": "Foto di wahana di Antapura D\'Jati"},

@@ -2,8 +2,15 @@ import { useState, useEffect } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { api } from "../lib/supabase";
-import { isFreeCell, eventStatus } from "../lib/bingo";
+import { isFreeCell, eventStatus, requiredCount } from "../lib/bingo";
 import AdminGate from "../components/AdminGate";
+
+// Dealing rules a pool cell can have (none = purely random)
+const RULE_OPTIONS = [
+  { value: "", label: "Acak" },
+  { value: "always", label: "📌 Selalu ada" },
+  { value: "group", label: "🔷 Grup" },
+];
 
 // ISO ↔ value of <input type="datetime-local"> (in the admin's local time zone)
 const toLocalInput = (iso) => {
@@ -46,13 +53,19 @@ function MasterPanel() {
       : "";
 
   const selected = cells.find((c) => c.id === selectedCell);
+  const alwaysCount = cells.filter((c) => !isFreeCell(c) && c.rule === "always").length;
+  const groupCount = cells.filter((c) => !isFreeCell(c) && c.rule === "group").length;
+  const ruleError =
+    requiredCount(cells) > 24
+      ? "Terlalu banyak sel wajib: maksimal 24 (termasuk 1 slot untuk grup)."
+      : "";
 
-  const updateLabel = (id, value) => {
-    setCells((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, label: value } : c)),
-    );
+  const updateCell = (id, patch) => {
+    setCells((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
     setSaved(false);
   };
+  const updateLabel = (id, value) => updateCell(id, { label: value });
+  const updateRule = (id, value) => updateCell(id, { rule: value || undefined });
 
   const handleSave = async () => {
     setSaving(true);
@@ -114,6 +127,11 @@ function MasterPanel() {
               acak dari pool ini + GARUT di tengah. Perubahan label langsung
               berlaku di semua papan.
             </p>
+            <p className="text-blue-300/70 text-xs mt-2">
+              📌 Selalu ada: sel muncul di setiap papan. 🔷 Grup: setiap papan
+              memuat minimal 1 sel dari grup. Aturan hanya berlaku untuk papan
+              yang dibuat atau diacak ulang setelah disimpan.
+            </p>
           </div>
 
           {/* Event window */}
@@ -174,8 +192,8 @@ function MasterPanel() {
           <div className="grid grid-cols-3 gap-3 mb-6">
             {[
               { label: "Sel di Pool", value: String(cells.length), icon: "🎯" },
-              { label: "Baris / Kolom", value: "5×5", icon: "📋" },
-              { label: "Sel GARUT", value: "Tengah", icon: "⭐" },
+              { label: "Selalu Ada", value: String(alwaysCount), icon: "📌" },
+              { label: "Sel di Grup", value: String(groupCount), icon: "🔷" },
             ].map((s) => (
               <div
                 key={s.label}
@@ -236,6 +254,11 @@ function MasterPanel() {
                           {cell.id + 1}
                         </div>
                       )}
+                      {!isFree && cell.rule && (
+                        <div className="absolute top-0.5 left-0.5 text-[8px]">
+                          {cell.rule === "always" ? "📌" : "🔷"}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -268,6 +291,21 @@ function MasterPanel() {
               <p className="text-blue-400/50 text-xs mt-1 text-right">
                 {selected?.label?.length || 0}/80
               </p>
+              <div className="flex gap-2 mt-2">
+                {RULE_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    onClick={() => updateRule(selectedCell, o.value)}
+                    className={`flex-1 rounded-lg py-2 text-xs transition-colors ${
+                      (selected?.rule || "") === o.value
+                        ? "bg-blue-500/40 text-white border border-cyan-400/60"
+                        : "glass-card text-blue-300 hover:text-white"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -297,15 +335,29 @@ function MasterPanel() {
                         ⭐ {cell.label} — sel gratis di tengah (tidak dapat diubah)
                       </div>
                     ) : (
-                      <input
-                        type="text"
-                        value={cell.label}
-                        onChange={(e) => updateLabel(cell.id, e.target.value)}
-                        onFocus={() => setSelectedCell(cell.id)}
-                        className="flex-1 glass-input rounded-lg px-3 py-1.5 text-white text-sm"
-                        placeholder={`Label sel ${cell.id + 1}...`}
-                        maxLength={80}
-                      />
+                      <>
+                        <input
+                          type="text"
+                          value={cell.label}
+                          onChange={(e) => updateLabel(cell.id, e.target.value)}
+                          onFocus={() => setSelectedCell(cell.id)}
+                          className="flex-1 min-w-0 glass-input rounded-lg px-3 py-1.5 text-white text-sm"
+                          placeholder={`Label sel ${cell.id + 1}...`}
+                          maxLength={80}
+                        />
+                        <select
+                          value={cell.rule || ""}
+                          onChange={(e) => updateRule(cell.id, e.target.value)}
+                          className="glass-input rounded-lg px-2 py-1.5 text-white text-xs flex-shrink-0"
+                          style={{ colorScheme: "dark" }}
+                        >
+                          {RULE_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </>
                     )}
                   </div>
                 );
@@ -314,10 +366,11 @@ function MasterPanel() {
           </div>
 
           {/* Save button */}
+          {ruleError && <p className="text-red-300 text-xs mb-2">{ruleError}</p>}
           <div className="sticky bottom-4 flex gap-3">
             <button
               onClick={handleSave}
-              disabled={saving || !!timeError}
+              disabled={saving || !!timeError || !!ruleError}
               className={`flex-1 rounded-xl py-4 font-bold text-sm transition-all ${
                 saved ? "bg-green-500/80 text-white" : "btn-primary text-white"
               }`}

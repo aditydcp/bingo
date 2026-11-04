@@ -14,6 +14,15 @@ export const LINES = [
 
 export const isFreeCell = (cell) => !!cell && (cell.free || cell.label === "FREE");
 
+// Board slots taken by dealing rules: every "always" cell plus one cell from the "group"
+export function requiredCount(cells) {
+  const pool = cells.filter((c) => !isFreeCell(c));
+  return (
+    pool.filter((c) => c.rule === "always").length +
+    (pool.some((c) => c.rule === "group") ? 1 : 0)
+  );
+}
+
 export function checkBingo(markedSet) {
   return LINES.filter((line) => line.every((pos) => markedSet.has(pos)));
 }

@@ -42,12 +42,16 @@ function shuffle(arr) {
   return arr;
 }
 
-// 25 master cell IDs: 24 random non-free cells with the free (GARUT) cell at the centre
+// 25 master cell IDs: 24 random non-free cells with the free (GARUT) cell at the centre.
+// Cells with rule "always" are on every board; at least one "group" cell is on every board.
 export function randomPositions(masterCells) {
   const free = masterCells.find(isFreeCell) || { id: 12 };
-  const picked = shuffle(masterCells.filter((c) => c.id !== free.id))
-    .slice(0, 24)
-    .map((c) => c.id);
+  const pool = shuffle(masterCells.filter((c) => c.id !== free.id));
+  const required = pool.filter((c) => c.rule === "always");
+  const groupPick = pool.find((c) => c.rule === "group");
+  if (groupPick) required.push(groupPick);
+  const rest = pool.filter((c) => !required.includes(c));
+  const picked = shuffle([...required, ...rest].slice(0, 24)).map((c) => c.id);
   picked.splice(FREE_POS, 0, free.id);
   return picked;
 }
