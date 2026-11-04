@@ -175,7 +175,7 @@ export default function BingoPage() {
   };
 
   const handleCellClick = (pos) => {
-    if (pos === FREE_POS) return;
+    if (pos === FREE_POS || rerolling) return;
     if (cells[pos]?.photoUrl) {
       setPreviewCell(pos);
       return;
@@ -343,8 +343,17 @@ export default function BingoPage() {
             </span>
           </div>
 
-          {/* Bingo grid — rendered from user's personal board */}
-          <div className="bingo-grid">
+          {/* Bingo grid — rendered from user's personal board; muted while rerolling */}
+          <div className="relative">
+          {rerolling && (
+            <div className="board-busy-overlay fade-in">
+              <div className="spinner" />
+              <p className="text-slate-700 font-extrabold text-sm bg-white/80 rounded-full px-3 py-1">
+                Mengacak papan…
+              </p>
+            </div>
+          )}
+          <div className={`bingo-grid ${rerolling ? "board-busy" : ""}`} aria-busy={rerolling}>
             {LETTERS.map((l) => (
               <div key={l} className="bingo-header-cell">
                 {l}
@@ -398,6 +407,7 @@ export default function BingoPage() {
                 </div>
               );
             })}
+          </div>
           </div>
 
           {/* Recorded times */}
