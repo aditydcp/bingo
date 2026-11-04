@@ -17,7 +17,6 @@ const anonClient = () => createClient(URL_, process.env.NEXT_PUBLIC_SUPABASE_ANO
 const CLOUD = process.env.CLOUDINARY_CLOUD_NAME;
 
 const createdUserIds = [];
-const realUploadUsers = new Set();
 
 // Calls a Next.js API handler with a minimal req/res pair → { status, body }
 export async function call(handler, { method = "GET", token, body, query = {} } = {}) {
@@ -52,7 +51,7 @@ export async function makeUser({ alias, admin = false } = {}) {
     type: "magiclink",
   });
   if (session.error) throw session.error;
-  const user = { id: data.user.id, email, token: session.data.session.access_token };
+  const user = { id: data.user.id, email, token: session.data.session.access_token, session: session.data.session };
   if (admin) {
     const { error: e } = await db.from("admins").insert({ user_id: user.id });
     if (e) throw e;
@@ -125,7 +124,6 @@ const PNG = Buffer.from(
 export async function uploadToCloudinary(user, position) {
   const sig = await call(signatureHandler, { method: "POST", token: user.token, body: { position } });
   if (sig.status !== 200) throw new Error(`signature ${sig.status} ${JSON.stringify(sig.body)}`);
-  realUploadUsers.add(user.id);
   const fd = new FormData();
   fd.append("file", new Blob([PNG], { type: "image/png" }), "p.png");
   fd.append("api_key", sig.body.apiKey);
@@ -166,18 +164,17 @@ export const testPool = (rules = {}) =>
     id === 12 ? { id, label: "GARUT", free: true } : { id, label: `Test cell ${id}`, ...rules[id] },
   );
 
+// Deletes every user made here (cascading to their rows) and any photos they uploaded,
+// whether through uploadToCloudinary or from a browser test
 export async function cleanup() {
+  const auth = "Basic " + Buffer.from(`${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`).toString("base64");
   for (const id of createdUserIds.splice(0)) {
     await db.auth.admin.deleteUser(id); // cascades to profiles, boards, states, history, records, admins
-  }
-  const auth = "Basic " + Buffer.from(`${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`).toString("base64");
-  for (const id of realUploadUsers) {
     await fetch(
       `https://api.cloudinary.com/v1_1/${CLOUD}/resources/image/upload?prefix=${encodeURIComponent(`bingo/${id}/`)}`,
       { method: "DELETE", headers: { Authorization: auth } },
     );
   }
-  realUploadUsers.clear();
 }
 
 export const ROW0 = [0, 1, 2, 3, 4];

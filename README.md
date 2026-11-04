@@ -99,7 +99,8 @@ npm run dev                  # http://localhost:3000
 
 ```bash
 npm run test:unit            # game logic, no network
-npm test                     # everything; integration tests use the real Supabase + Cloudinary in .env
+npm test                     # unit + integration; integration tests use the real Supabase + Cloudinary in .env
+npm run test:e2e             # browser tests in the installed Microsoft Edge (starts next dev on port 3123)
 ```
 
 Integration tests create their own throwaway players and delete them (and their photos) afterwards, and restore the master config. Guest tests need **Allow anonymous sign-ins** enabled.
