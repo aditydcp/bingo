@@ -11,9 +11,16 @@ import {
   thumb,
   fullPhoto,
 } from "../lib/bingo";
-import { api, getSession, linkGoogle, supabase } from "../lib/supabase";
+import { api, getSession, linkGoogle, supabase, sleep } from "../lib/supabase";
 import { compressImage } from "../lib/compressImage";
 import { renderBoardImage, formatTime } from "../lib/boardImage";
+import {
+  backoff,
+  isPermanent,
+  pendingStore,
+  photoSizeForConnection,
+  uploadPhoto,
+} from "../lib/uploadQueue";
 import GoogleButton from "../components/GoogleButton";
 import Celebration from "../components/Celebration";
 import Logo from "../components/Logo";
@@ -21,6 +28,7 @@ import Logo from "../components/Logo";
 const ERROR_TEXT = {
   event_not_started: "Event belum dimulai. Foto bisa diunggah saat event berlangsung.",
   event_closed: "Event sudah selesai. Foto tidak bisa ditambah lagi.",
+  board_changed: "Papan sudah berubah, foto yang belum terkirim dibatalkan.",
 };
 
 const withFree = (cells) => ({
@@ -52,7 +60,9 @@ export default function BingoPage() {
   const [clockOffset, setClockOffset] = useState(0); // server time − device time
   const [now, setNow] = useState(Date.now());
   const [selectedCell, setSelectedCell] = useState(null);
-  const [uploading, setUploading] = useState(false);
+  const [pending, setPending] = useState({}); // position → { url, progress, status: "sending" | "waiting" }
+  const [online, setOnline] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [rerolling, setRerolling] = useState(false);
   const [previewCell, setPreviewCell] = useState(null);
   const [downloading, setDownloading] = useState(false);
@@ -84,26 +94,152 @@ export default function BingoPage() {
       history.replaceState(null, "", window.location.pathname);
     }
 
-    (async () => {
-      if (!(await getSession())) {
-        router.replace("/");
-        return;
-      }
-      try {
-        const data = await api("/api/state");
-        setUser(data.profile);
-        setIsGuest(data.isGuest);
-        setBoard(data.board);
-        setRound(data.round);
-        setCells(withFree(data.cells));
-        setRecords(data.records);
-        setEvent({ start: data.eventStart, end: data.eventEnd });
-        setClockOffset(new Date(data.serverNow).getTime() - Date.now());
-      } catch {
-        router.replace("/");
-      }
-    })();
+    loadState();
   }, []);
+
+  const loadState = async () => {
+    setLoadError(false);
+    const session = await getSession();
+    if (!session) {
+      router.replace("/");
+      return;
+    }
+    let data;
+    try {
+      data = await api("/api/state");
+    } catch (err) {
+      // Signed out / no alias yet → back to sign-in. Anything else is most likely bad signal.
+      if (err.status === 401 || err.status === 404) router.replace("/");
+      else setLoadError(true);
+      return;
+    }
+    userIdRef.current = session.user.id;
+    boardRef.current = data.board;
+    cellsRef.current = withFree(data.cells);
+    setUser(data.profile);
+    setIsGuest(data.isGuest);
+    setBoard(data.board);
+    setRound(data.round);
+    setCells(cellsRef.current);
+    setRecords(data.records);
+    setEvent({ start: data.eventStart, end: data.eventEnd });
+    setClockOffset(new Date(data.serverNow).getTime() - Date.now());
+    resumeSavedUploads();
+  };
+
+  // ── Photo upload queue (survives bad signal and reloads) ──────────
+  const userIdRef = useRef(null);
+  const boardRef = useRef(null);
+  const cellsRef = useRef({});
+  const queueRef = useRef([]); // [{ key, position, cellId, blob, attempts }]
+  const runningRef = useRef(false);
+  const abortRef = useRef(null);
+  const wakeRef = useRef(null);
+
+  const setPendingFor = (pos, patch) =>
+    setPending((p) => (patch ? { ...p, [pos]: { ...p[pos], ...patch } } : omit(p, pos)));
+  const omit = (obj, key) => {
+    const { [key]: gone, ...rest } = obj;
+    if (gone?.url) URL.revokeObjectURL(gone.url);
+    return rest;
+  };
+
+  const dropFromQueue = (item) => {
+    queueRef.current = queueRef.current.filter((i) => i !== item);
+    pendingStore.remove(item.key);
+    setPendingFor(item.position, null);
+  };
+
+  const enqueue = (item) => {
+    queueRef.current.filter((i) => i.position === item.position).forEach(dropFromQueue);
+    queueRef.current.push(item);
+    setPendingFor(item.position, { url: URL.createObjectURL(item.blob), progress: 0, status: "waiting" });
+    runQueue();
+  };
+
+  const resumeSavedUploads = async () => {
+    const saved = await pendingStore.load(userIdRef.current);
+    saved.forEach((item) => {
+      if (boardRef.current[item.position]?.cellId === item.cellId) enqueue({ ...item, attempts: 0 });
+      else pendingStore.remove(item.key);
+    });
+  };
+
+  // Sends queued photos one at a time; waits (and retries) while the signal is bad
+  const runQueue = async () => {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    try {
+      while (queueRef.current.length) {
+        const item = queueRef.current[0];
+        if (!navigator.onLine) {
+          await new Promise((resolve) => (wakeRef.current = resolve)); // woken by "online"
+          continue;
+        }
+        if (boardRef.current?.[item.position]?.cellId !== item.cellId) {
+          dropFromQueue(item);
+          setNotice(ERROR_TEXT.board_changed);
+          continue;
+        }
+        setPendingFor(item.position, { status: "sending", progress: 0 });
+        abortRef.current = new AbortController();
+        try {
+          const data = await uploadPhoto({
+            position: item.position,
+            blob: item.blob,
+            signal: abortRef.current.signal,
+            onProgress: (progress) => setPendingFor(item.position, { progress }),
+          });
+          dropFromQueue(item);
+          onUploaded(item.position, data);
+        } catch (err) {
+          item.attempts += 1;
+          if (isPermanent(err, item.attempts)) {
+            if (!err.aborted) {
+              dropFromQueue(item);
+              setNotice(ERROR_TEXT[err.message] || "Foto gagal dikirim. Coba ambil ulang.");
+            }
+            continue;
+          }
+          setPendingFor(item.position, { status: "waiting", progress: 0 });
+          await Promise.race([sleep(backoff(item.attempts)), new Promise((r) => (wakeRef.current = r))]);
+        }
+      }
+    } finally {
+      runningRef.current = false;
+    }
+  };
+
+  const onUploaded = (pos, data) => {
+    const before = cellsRef.current;
+    const after = { ...before, [pos]: data.cell };
+    cellsRef.current = after;
+    setCells(after);
+    setRecords(data.records);
+    celebrate(before, after);
+  };
+
+  useEffect(() => {
+    setOnline(navigator.onLine);
+    const wake = () => {
+      setOnline(navigator.onLine);
+      if (navigator.onLine) wakeRef.current?.();
+    };
+    const warn = (e) => {
+      if (queueRef.current.length) e.preventDefault();
+    };
+    window.addEventListener("online", wake);
+    window.addEventListener("offline", wake);
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      window.removeEventListener("online", wake);
+      window.removeEventListener("offline", wake);
+      window.removeEventListener("beforeunload", warn);
+    };
+  }, []);
+
+  const pendingCount = Object.keys(pending).length;
+  const sendingNow = Object.values(pending).find((p) => p.status === "sending");
 
   const handleSignOut = async () => {
     if (
@@ -126,18 +262,27 @@ export default function BingoPage() {
   const handleReroll = async () => {
     if (
       !confirm(
-        "Acak ulang papan?\n\nPapan dan semua sel yang sudah terisi akan direset dengan sel acak baru. Rekor Bingo yang sudah tercatat tetap disimpan.",
+        "Acak ulang papan?\n\nPapan dan semua sel yang sudah terisi akan direset dengan sel acak baru. Rekor Bingo yang sudah tercatat tetap disimpan." +
+          (pendingCount ? `\n\n${pendingCount} foto yang belum terkirim akan dibatalkan.` : ""),
       )
     )
       return;
     setRerolling(true);
     try {
-      const data = await api("/api/reroll", { method: "POST" });
+      const data = await api("/api/reroll", { method: "POST", timeout: 30000 });
+      abortRef.current?.abort();
+      [...queueRef.current].forEach(dropFromQueue);
+      boardRef.current = data.board;
+      cellsRef.current = withFree(data.cells);
       setBoard(data.board);
       setRound(data.round);
-      setCells(withFree(data.cells));
+      setCells(cellsRef.current);
     } catch {
-      alert("Gagal mengacak ulang papan. Coba lagi.");
+      alert(
+        navigator.onLine
+          ? "Gagal mengacak ulang papan. Coba lagi."
+          : "Tidak ada sinyal. Coba acak ulang lagi saat sinyal kembali.",
+      );
     } finally {
       setRerolling(false);
     }
@@ -176,6 +321,14 @@ export default function BingoPage() {
 
   const handleCellClick = (pos) => {
     if (pos === FREE_POS || rerolling) return;
+    if (pending[pos]) {
+      if (confirm("Foto ini belum terkirim. Batalkan foto ini?")) {
+        const item = queueRef.current.find((i) => i.position === pos);
+        if (item === queueRef.current[0]) abortRef.current?.abort();
+        if (item) dropFromQueue(item);
+      }
+      return;
+    }
     if (cells[pos]?.photoUrl) {
       setPreviewCell(pos);
       return;
@@ -183,6 +336,7 @@ export default function BingoPage() {
     openCamera(pos);
   };
 
+  // Shows the ceremony for a new line / Bingo / full board; returns whether it did
   const celebrate = (before, after) => {
     const linesBefore = checkBingo(markedSetFrom(before)).length;
     const linesAfter = checkBingo(markedSetFrom(after)).length;
@@ -190,47 +344,45 @@ export default function BingoPage() {
     if (full(after) && !full(before)) setCelebration({ kind: "full" });
     else if (linesBefore === 0 && linesAfter > 0) setCelebration({ kind: "bingo" });
     else if (linesAfter > linesBefore) setCelebration({ kind: "line", lines: linesAfter });
+    else return false;
+    return true;
   };
 
+  // Photo taken: shrink it, keep it on the phone, and queue it for upload
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
-    if (!file || selectedCell === null) return;
-    setUploading(true);
-    try {
-      // compress on the phone → signed direct upload to Cloudinary → record on our API
-      const [photo, sig] = await Promise.all([
-        compressImage(file),
-        api("/api/upload-signature", { method: "POST", body: { position: selectedCell } }),
-      ]);
-      const fd = new FormData();
-      fd.append("file", photo);
-      fd.append("api_key", sig.apiKey);
-      fd.append("timestamp", sig.timestamp);
-      fd.append("public_id", sig.publicId);
-      fd.append("signature", sig.signature);
-      const uploadRes = await fetch(sig.uploadUrl, { method: "POST", body: fd });
-      if (!uploadRes.ok) throw new Error("cloudinary upload failed");
-      const uploaded = await uploadRes.json();
-      const data = await api("/api/cells", {
-        method: "POST",
-        body: {
-          position: selectedCell,
-          photoUrl: uploaded.secure_url,
-          publicId: uploaded.public_id,
-        },
-      });
-      const updated = { ...cells, [selectedCell]: data.cell };
-      setCells(updated);
-      setRecords(data.records);
-      celebrate(cells, updated);
-    } catch (err) {
-      alert(ERROR_TEXT[err.message] || "Upload gagal. Coba lagi.");
-    } finally {
-      setUploading(false);
-      setSelectedCell(null);
-      if (fileRef.current) fileRef.current.value = "";
-    }
+    const pos = selectedCell;
+    setSelectedCell(null);
+    if (fileRef.current) fileRef.current.value = "";
+    if (!file || pos === null) return;
+    const { maxSide, quality } = photoSizeForConnection();
+    const blob = await compressImage(file, maxSide, quality);
+    const item = {
+      key: `${userIdRef.current}:${pos}`,
+      userId: userIdRef.current,
+      position: pos,
+      cellId: boardRef.current[pos].cellId,
+      blob,
+      createdAt: Date.now(),
+    };
+    await pendingStore.save(item);
+    enqueue({ ...item, attempts: 0 });
   };
+
+  if (loadError) {
+    return (
+      <div className="bingo-bg min-h-screen flex items-center justify-center p-6">
+        <div className="glass-card rounded-2xl p-6 text-center max-w-xs fade-in">
+          <div className="text-4xl mb-2">📶</div>
+          <p className="text-slate-800 font-extrabold">Sinyal lemah</p>
+          <p className="text-slate-500 text-sm mt-1">Papan bingo belum bisa dimuat.</p>
+          <button onClick={loadState} className="btn-primary rounded-xl px-6 py-2.5 text-white font-extrabold text-sm mt-4">
+            Coba lagi
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!user || !board) {
     return (
@@ -317,6 +469,28 @@ export default function BingoPage() {
             </div>
           )}
 
+          {/* Connection / upload status */}
+          {!online ? (
+            <div className="mt-3 px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-xs fade-in">
+              <b>📵 Tidak ada sinyal.</b>{" "}
+              {pendingCount
+                ? `${pendingCount} foto tersimpan di HP dan akan dikirim otomatis saat sinyal kembali.`
+                : "Kamu tetap bisa mengambil foto; foto akan dikirim otomatis saat sinyal kembali."}
+            </div>
+          ) : (
+            pendingCount > 0 && (
+              <div className="mt-3 px-4 py-2.5 rounded-xl bg-orange-50 border border-orange-200 text-orange-700 text-xs flex items-center gap-2 fade-in">
+                <span className="spinner-sm flex-shrink-0" />
+                <span>
+                  {sendingNow
+                    ? `Mengirim foto… ${Math.round((sendingNow.progress || 0) * 100)}%`
+                    : "Sinyal lemah, mencoba mengirim lagi…"}
+                  {pendingCount > 1 && ` (${pendingCount} foto antre)`}
+                </span>
+              </div>
+            )
+          )}
+
           {/* Bingo banner */}
           {hasBingo && (
             <div className="bingo-banner rounded-xl p-3 my-3 text-center fade-in">
@@ -367,6 +541,7 @@ export default function BingoPage() {
               const isFree = pos === FREE_POS;
               const isWin = winSet.has(pos);
               const hasPhoto = !!state?.photoUrl;
+              const queued = pending[pos];
 
               return (
                 <div
@@ -374,7 +549,24 @@ export default function BingoPage() {
                   className={`bingo-cell ${isMarked ? "marked" : "unmarked"} ${isWin ? "winning" : ""} ${isFree ? "free-cell" : ""}`}
                   onClick={() => handleCellClick(pos)}
                 >
-                  {hasPhoto ? (
+                  {queued ? (
+                    <>
+                      <img src={queued.url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                      <div className="pending-overlay">
+                        {queued.status === "sending" ? (
+                          <>
+                            <span className="spinner-sm" />
+                            {Math.round((queued.progress || 0) * 100)}%
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-base">⏳</span>
+                            {online ? "antre" : "offline"}
+                          </>
+                        )}
+                      </div>
+                    </>
+                  ) : hasPhoto ? (
                     <>
                       <img
                         src={thumb(state.photoUrl)}
@@ -453,7 +645,7 @@ export default function BingoPage() {
 
           <button
             onClick={handleReroll}
-            disabled={rerolling || uploading}
+            disabled={rerolling}
             className="mt-3 w-full glass-card rounded-xl py-3 text-slate-600 text-sm hover:text-slate-900 transition-colors disabled:opacity-50"
           >
             {rerolling ? "Mengacak..." : "🔀 Acak Ulang Papan"}
@@ -494,17 +686,6 @@ export default function BingoPage() {
             <div className="glass-card rounded-2xl p-8 text-center fade-in">
               <div className="spinner mb-4" />
               <p className="text-slate-800 font-semibold">Membuat kartu bingo...</p>
-              <p className="text-slate-500 text-xs mt-1">Mohon tunggu</p>
-            </div>
-          </div>
-        )}
-
-        {/* Upload overlay */}
-        {uploading && (
-          <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-50">
-            <div className="glass-card rounded-2xl p-8 text-center fade-in">
-              <div className="spinner mb-4" />
-              <p className="text-slate-800 font-semibold">Mengunggah foto...</p>
               <p className="text-slate-500 text-xs mt-1">Mohon tunggu</p>
             </div>
           </div>

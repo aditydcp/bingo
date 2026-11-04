@@ -37,10 +37,10 @@ Game rules as the organizer defined them are summarized in `README.md` → "Game
 
 **Photos are never deleted** from Cloudinary (not on replace, reroll or admin reset): record snapshots and `board_history` still reference them.
 
-**Photo upload flow** (`pages/bingo.js` → `handleFileChange`):
-1. `compressImage` (≤1280 px JPEG) in the browser.
+**Photo upload flow** (`pages/bingo.js` → `handleFileChange` → `runQueue`; helpers in `src/lib/uploadQueue.js`). Built for bad signal: a taken photo goes into a queue persisted in IndexedDB (`pendingStore`, survives reloads) and is sent one at a time in the background with backoff retries; waits for the `online` event when offline. The cell shows the local photo with progress until the server confirms. `isPermanent` decides drop vs retry (4xx like `event_closed` drop; no response / 5xx retry). Items carry the `cellId` and are dropped if the board changed (reroll). `api()` in `src/lib/supabase.js` has a timeout and retries GETs; only pass `retries` to idempotent POSTs (never reroll).
+1. `compressImage` in the browser (≤1280 px JPEG; smaller on 2G/3G/data saver, `photoSizeForConnection`).
 2. `POST /api/upload-signature` checks the event window and returns a signed Cloudinary upload with `public_id = bingo/<userId>/<cellId>_<timestamp>`.
-3. Browser uploads directly to Cloudinary (keeps photos out of Vercel's 4.5 MB body limit).
+3. Browser uploads directly to Cloudinary via XHR for progress, aborting if stalled (keeps photos out of Vercel's 4.5 MB body limit).
 4. `POST /api/cells` re-checks the window (2-min grace after the end), validates the URL/public_id belongs to that user + cell (`isOwnUpload`), stores it, then calls `updateRecords`.
 Display uses Cloudinary URL transforms (`thumb`, `fullPhoto` in `src/lib/bingo.js`) rather than `next/image`.
 

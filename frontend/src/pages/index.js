@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
-import { api, getSession, signInWithGoogle, supabase } from "../lib/supabase";
+import { api, getSession, isTransient, signInWithGoogle, supabase } from "../lib/supabase";
 import GoogleButton from "../components/GoogleButton";
 import Logo from "../components/Logo";
 
@@ -10,6 +10,7 @@ const ERROR_TEXT = {
 };
 
 // step: "checking" → "signin" (no session) → "profile" (signed in, no alias yet) → /bingo
+//       "offline" when the check itself fails because of bad signal
 export default function RegisterPage() {
   const router = useRouter();
   const [step, setStep] = useState("checking");
@@ -25,8 +26,8 @@ export default function RegisterPage() {
         return;
       }
       setStep("profile");
-    } catch {
-      setStep("signin");
+    } catch (err) {
+      setStep(isTransient(err) ? "offline" : "signin");
     }
   };
 
@@ -58,10 +59,13 @@ export default function RegisterPage() {
     setLoading(true);
     setError("");
     try {
-      await api("/api/me", { method: "POST", body: { name: alias.trim() } });
+      await api("/api/me", { method: "POST", body: { name: alias.trim() }, retries: 2 });
       router.push("/bingo");
     } catch (err) {
-      setError(ERROR_TEXT[err.message] || "Gagal menyimpan alias. Coba lagi.");
+      setError(
+        ERROR_TEXT[err.message] ||
+          (isTransient(err) ? "Sinyal lemah. Coba lagi sebentar." : "Gagal menyimpan alias. Coba lagi."),
+      );
       setLoading(false);
     }
   };
@@ -71,6 +75,27 @@ export default function RegisterPage() {
     setAlias("");
     setStep("signin");
   };
+
+  if (step === "offline") {
+    return (
+      <div className="bingo-bg min-h-screen flex items-center justify-center p-6">
+        <div className="glass-card rounded-2xl p-6 text-center max-w-xs fade-in">
+          <div className="text-4xl mb-2">📶</div>
+          <p className="text-slate-800 font-extrabold">Sinyal lemah</p>
+          <p className="text-slate-500 text-sm mt-1">Tidak bisa terhubung ke server.</p>
+          <button
+            onClick={() => {
+              setStep("checking");
+              checkProfile();
+            }}
+            className="btn-primary rounded-xl px-6 py-2.5 text-white font-extrabold text-sm mt-4"
+          >
+            Coba lagi
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (step === "checking") {
     return (

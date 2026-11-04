@@ -194,6 +194,29 @@ body {
   line-height: 1;
 }
 
+/* Photo still waiting to reach the server */
+.pending-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: rgba(255, 250, 242, 0.55);
+  color: #9a5b2e;
+  font-size: 10px;
+  font-weight: 900;
+}
+.spinner-sm {
+  width: 18px;
+  height: 18px;
+  border: 3px solid #ffe1cc;
+  border-top-color: var(--coral);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
 /* Board while a reroll is in flight: muted, untouchable, spinner on top */
 .board-busy {
   filter: grayscale(1);
