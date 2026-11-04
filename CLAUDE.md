@@ -21,7 +21,7 @@ Database schema: `supabase/schema.sql`, run manually in the Supabase SQL editor 
 
 **Data access goes only through API routes.** Every table has RLS enabled with *no policies*, so the browser cannot touch the DB directly. API routes use the service-role client (`db()` in `src/lib/server/route.js`) and identify the caller from the `Authorization: Bearer <supabase access token>` header (`requireUser` / `requireAdmin`). The browser calls routes via `api()` in `src/lib/supabase.js`, which attaches the token. Routes are written as `export default route({ GET: ..., POST: ... })`; throw `HttpError(status, msg)` for client errors and wrap Supabase results in `must()`.
 
-**Auth.** Supabase Auth with Google OAuth and anonymous (guest) sign-in. Guests can upgrade via `linkIdentity` (keeps the same user ID); a failed link returns to `/bingo` with an error in the URL hash. A `profiles` row (name, entitas) is required before playing — `/` handles sign-in → profile form → redirect to `/bingo`. Admins are rows in the `admins` table; `/admin` and `/master` are wrapped in `components/AdminGate.js`.
+**Auth.** Supabase Auth with Google OAuth and anonymous (guest) sign-in. Guests can upgrade via `linkIdentity` (keeps the same user ID); a failed link returns to `/bingo` with an error in the URL hash. A `profiles` row (`name` = the player's self-chosen alias, unique case-insensitively) is required before playing — `/` handles sign-in → profile form → redirect to `/bingo`. Admins are rows in the `admins` table; `/admin` and `/master` are wrapped in `components/AdminGate.js`.
 
 Game rules as the organizer defined them are summarized in `README.md` → "Game rules"; keep code and that section in sync.
 

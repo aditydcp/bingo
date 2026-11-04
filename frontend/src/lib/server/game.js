@@ -89,7 +89,7 @@ export async function getRecords(userId) {
 
 export async function requireProfile(userId) {
   const profile = must(
-    await db().from("profiles").select("name, entitas").eq("id", userId).maybeSingle(),
+    await db().from("profiles").select("name").eq("id", userId).maybeSingle(),
   );
   if (!profile) throw new HttpError(404, "profile_not_found");
   return profile;

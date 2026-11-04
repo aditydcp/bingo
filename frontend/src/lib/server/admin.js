@@ -21,7 +21,6 @@ export async function loadUsers() {
     users[p.id] = {
       id: p.id,
       name: p.name,
-      entitas: p.entitas,
       registeredAt: p.created_at,
       email: authById[p.id]?.email || null,
       isGuest: !!authById[p.id]?.is_anonymous,

@@ -5,8 +5,7 @@
 
 create table if not exists profiles (
   id          uuid primary key references auth.users (id) on delete cascade,
-  name        text not null,
-  entitas     text not null,
+  name        text not null, -- player's chosen alias
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
@@ -69,6 +68,7 @@ alter table boards        add column if not exists round integer not null defaul
 alter table master_config add column if not exists event_start timestamptz;
 alter table master_config add column if not exists event_end timestamptz;
 drop table if exists completions; -- replaced by records
+alter table profiles      drop column if exists entitas; -- players now pick an alias only
 update master_config
    set cells = (
      select jsonb_agg(

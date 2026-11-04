@@ -59,7 +59,7 @@ export async function buildPhotoExport(data, onProgress = () => {}) {
 
   Object.values(users).forEach((user) => {
     const folder = zip.folder(clean(`${clean(user.name)} (${user.id.slice(0, 6)})`));
-    const who = { name: user.name, entitas: user.entitas };
+    const who = { name: user.name };
 
     const board = buildBoard(boards[user.id]?.positions, masterCells);
     const cells = states[user.id]?.cells || {};
