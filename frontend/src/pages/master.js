@@ -2,9 +2,16 @@ import { useState, useEffect } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { api } from "../lib/supabase";
+import { isFreeCell, eventStatus } from "../lib/bingo";
 import AdminGate from "../components/AdminGate";
 
-const isFreeCell = (cell) => cell.label === "FREE";
+// ISO ↔ value of <input type="datetime-local"> (in the admin's local time zone)
+const toLocalInput = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+};
+const fromLocalInput = (value) => (value ? new Date(value).toISOString() : null);
 
 export default function MasterPage() {
   return (
@@ -14,16 +21,29 @@ export default function MasterPage() {
   );
 }
 
-// Edits labels of the master cell pool; each player's board is 24 random pool cells + FREE
+// Edits the event window and the labels of the master cell pool;
+// each player's board is 24 random pool cells + the free (GARUT) cell
 function MasterPanel() {
   const [cells, setCells] = useState([]);
+  const [eventStart, setEventStart] = useState("");
+  const [eventEnd, setEventEnd] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [selectedCell, setSelectedCell] = useState(null);
 
   useEffect(() => {
-    api("/api/admin/config").then((data) => setCells(data.cells || []));
+    api("/api/admin/config").then((data) => {
+      setCells(data.masterCells || []);
+      setEventStart(toLocalInput(data.eventStart));
+      setEventEnd(toLocalInput(data.eventEnd));
+    });
   }, []);
+
+  const status = eventStatus(fromLocalInput(eventStart), fromLocalInput(eventEnd));
+  const timeError =
+    eventStart && eventEnd && new Date(eventStart) >= new Date(eventEnd)
+      ? "Waktu selesai harus setelah waktu mulai."
+      : "";
 
   const selected = cells.find((c) => c.id === selectedCell);
 
@@ -37,7 +57,14 @@ function MasterPanel() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api("/api/admin/config", { method: "PUT", body: { cells } });
+      await api("/api/admin/config", {
+        method: "PUT",
+        body: {
+          cells,
+          eventStart: fromLocalInput(eventStart),
+          eventEnd: fromLocalInput(eventEnd),
+        },
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch {
@@ -83,9 +110,64 @@ function MasterPanel() {
               Bingo Master Panel
             </h1>
             <p className="text-blue-300 text-sm mt-1">
-              Edit label sel. Setiap peserta mendapat 24 sel acak dari pool ini
-              + FREE di tengah. Perubahan label langsung berlaku di semua papan.
+              Atur waktu event dan label sel. Setiap peserta mendapat 24 sel
+              acak dari pool ini + GARUT di tengah. Perubahan label langsung
+              berlaku di semua papan.
             </p>
+          </div>
+
+          {/* Event window */}
+          <div className="glass-card rounded-2xl p-5 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-white font-semibold text-sm">⏱ Waktu Event</h2>
+              <span
+                className={`badge ${
+                  status === "open" ? "badge-green" : status === "before" ? "badge-blue" : "badge-gray"
+                }`}
+              >
+                {{ before: "Belum mulai", open: "Berlangsung", after: "Selesai" }[status]}
+              </span>
+            </div>
+            <p className="text-blue-300/70 text-xs mb-4">
+              Peserta hanya bisa mengunggah foto di antara waktu ini. Kosongkan
+              untuk tanpa batas. Waktu mengikuti zona waktu perangkat ini.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {[
+                { label: "Mulai", value: eventStart, set: setEventStart },
+                { label: "Selesai", value: eventEnd, set: setEventEnd },
+              ].map((f) => (
+                <label key={f.label} className="block">
+                  <span className="block text-blue-200 text-xs font-medium mb-1.5">
+                    {f.label}
+                  </span>
+                  <div className="flex gap-2">
+                    <input
+                      type="datetime-local"
+                      value={f.value}
+                      onChange={(e) => {
+                        f.set(e.target.value);
+                        setSaved(false);
+                      }}
+                      className="flex-1 glass-input rounded-lg px-3 py-2 text-white text-sm"
+                      style={{ colorScheme: "dark" }}
+                    />
+                    {f.value && (
+                      <button
+                        onClick={() => {
+                          f.set("");
+                          setSaved(false);
+                        }}
+                        className="text-blue-400 hover:text-white text-xs px-2"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                </label>
+              ))}
+            </div>
+            {timeError && <p className="text-red-300 text-xs mt-2">{timeError}</p>}
           </div>
 
           {/* Quick info */}
@@ -93,7 +175,7 @@ function MasterPanel() {
             {[
               { label: "Sel di Pool", value: String(cells.length), icon: "🎯" },
               { label: "Baris / Kolom", value: "5×5", icon: "📋" },
-              { label: "Sel FREE", value: "Tengah", icon: "⭐" },
+              { label: "Sel GARUT", value: "Tengah", icon: "⭐" },
             ].map((s) => (
               <div
                 key={s.label}
@@ -140,7 +222,7 @@ function MasterPanel() {
                           <div className="text-center">
                             <div className="text-xl">⭐</div>
                             <div className="text-[9px] text-yellow-300 font-bold">
-                              FREE
+                              {cell.label}
                             </div>
                           </div>
                         ) : (
@@ -212,7 +294,7 @@ function MasterPanel() {
                     </div>
                     {isFree ? (
                       <div className="flex-1 py-1.5 px-3 rounded-lg text-sm text-yellow-300 bg-yellow-500/10 border border-yellow-500/20">
-                        ⭐ FREE (tidak dapat diubah)
+                        ⭐ {cell.label} — sel gratis di tengah (tidak dapat diubah)
                       </div>
                     ) : (
                       <input
@@ -235,7 +317,7 @@ function MasterPanel() {
           <div className="sticky bottom-4 flex gap-3">
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || !!timeError}
               className={`flex-1 rounded-xl py-4 font-bold text-sm transition-all ${
                 saved ? "bg-green-500/80 text-white" : "btn-primary text-white"
               }`}

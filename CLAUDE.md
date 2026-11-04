@@ -23,17 +23,23 @@ Database schema: `supabase/schema.sql`, run manually in the Supabase SQL editor 
 
 **Auth.** Supabase Auth with Google OAuth and anonymous (guest) sign-in. Guests can upgrade via `linkIdentity` (keeps the same user ID); a failed link returns to `/bingo` with an error in the URL hash. A `profiles` row (name, entitas) is required before playing — `/` handles sign-in → profile form → redirect to `/bingo`. Admins are rows in the `admins` table; `/admin` and `/master` are wrapped in `components/AdminGate.js`.
 
+Game rules as the organizer defined them are summarized in `README.md` → "Game rules"; keep code and that section in sync.
+
 **Board model — positions vs. cell IDs.**
-- `master_config.cells` (single row, id=1) is a pool of ~30 `{id, label}` cells; the one labelled `FREE` is special.
-- `boards.positions` holds 25 master cell IDs per user, dealt randomly on first `GET /api/state`, with FREE always at index 12 (`FREE_POS`).
-- `bingo_states.cells` is keyed by **board position (0–24)**, not cell ID. Writes go through the `set_cell` SQL function so concurrent uploads don't clobber each other.
-- Label edits in `/master` apply to existing boards (boards store IDs, labels are joined at read time).
+- `master_config` (single row, id=1) holds `cells`, a pool of ~30 `{id, label}` cells, plus `event_start` / `event_end`. The free cell is marked `{ free: true }` (label "GARUT"); detect it with `isFreeCell`, never by label.
+- `boards` holds `positions` (25 master cell IDs; the free cell always at index 12 = `FREE_POS`) and `round`. Dealt on first `GET /api/state`; `POST /api/reroll` archives the board + marks to `board_history`, clears `bingo_states`, deals a new board and increments `round`.
+- `bingo_states.cells` is keyed by **board position (0–24)**; each entry also stores `cellId`. Writes go through the `set_cell` SQL function so concurrent uploads don't clobber each other.
+- Label edits in `/master` apply to existing boards (boards store IDs, labels are joined at read time). Snapshots store their own copy of the board.
+
+**Photos are never deleted** from Cloudinary (not on replace, reroll or admin reset): record snapshots and `board_history` still reference them.
 
 **Photo upload flow** (`pages/bingo.js` → `handleFileChange`):
 1. `compressImage` (≤1280 px JPEG) in the browser.
-2. `POST /api/upload-signature` returns a signed Cloudinary upload with `public_id = bingo/<userId>/<pos>_<timestamp>`.
+2. `POST /api/upload-signature` checks the event window and returns a signed Cloudinary upload with `public_id = bingo/<userId>/<cellId>_<timestamp>`.
 3. Browser uploads directly to Cloudinary (keeps photos out of Vercel's 4.5 MB body limit).
-4. `POST /api/cells` validates the returned URL/public_id belongs to that user + position (`isOwnUpload`), stores it, and deletes the replaced photo.
+4. `POST /api/cells` re-checks the window (2-min grace after the end), validates the URL/public_id belongs to that user + cell (`isOwnUpload`), stores it, then calls `updateRecords`.
 Display uses Cloudinary URL transforms (`thumb`, `fullPhoto` in `src/lib/bingo.js`) rather than `next/image`.
 
-**Bingo logic** (`checkBingo`, `markedSetFrom` in `src/lib/bingo.js`) is shared by the client and `POST /api/finish`, which verifies a bingo server-side before recording the first finish time.
+**Records** (`records` table; `computeRecords` / `lineTimes` in `src/lib/bingo.js`, `updateRecords` in `src/lib/server/game.js`) are derived, not user-submitted. A completed line's time is the latest `markedAt` among its photo cells; first Bingo = the earliest such line, full board = latest `markedAt` once all 24 are filled. So replacing a photo in a winning line moves the record later. `updateRecords` only overwrites a record whose `*_round` equals the current board round; records from rerolled-away boards are final. Each record stores a snapshot `{ round, board, cells, lines }`.
+
+**Shared logic**: `checkBingo`, `LINES`, `markedSetFrom`, `cellsToLine`, `eventStatus` in `src/lib/bingo.js` are used by both pages and API routes. `src/lib/boardImage.js` renders a board to PNG (player's downloadable card and admin export). The admin photo export (`src/lib/exportPhotos.js`) builds the ZIP in the browser from `GET /api/admin/export`, since the archive is too large for a Vercel function response.
