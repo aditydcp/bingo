@@ -55,7 +55,7 @@ function MiniGrid({ cellStates }) {
 function PhotoPopup({ photo, onClose }) {
   return (
     <div
-      className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] p-4"
+      className="fixed inset-0 bg-slate-900/70 flex items-center justify-center z-[60] p-4"
       onClick={onClose}
     >
       <div
@@ -69,9 +69,9 @@ function PhotoPopup({ photo, onClose }) {
             className="w-full object-contain max-h-80"
           />
           <div className="p-4">
-            <p className="text-white text-sm font-semibold">{photo.label}</p>
+            <p className="text-slate-800 text-sm font-semibold">{photo.label}</p>
             {photo.markedAt && (
-              <p className="text-blue-300 text-xs mt-1">
+              <p className="text-slate-500 text-xs mt-1">
                 {new Date(photo.markedAt).toLocaleString("id-ID")}
               </p>
             )}
@@ -79,7 +79,7 @@ function PhotoPopup({ photo, onClose }) {
         </div>
         <button
           onClick={onClose}
-          className="mt-3 w-full text-center text-blue-300 text-sm hover:text-white transition-colors"
+          className="mt-3 w-full text-center text-slate-500 text-sm hover:text-slate-900 transition-colors"
         >
           Tutup
         </button>
@@ -101,7 +101,7 @@ function BoardModal({ user, title, board, cells, highlightLines, onClose, onRese
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto"
+        className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 overflow-y-auto"
         onClick={onClose}
       >
         <div
@@ -109,34 +109,31 @@ function BoardModal({ user, title, board, cells, highlightLines, onClose, onRese
           onClick={(e) => e.stopPropagation()}
         >
           {/* Modal header */}
-          <div className="p-5 border-b border-white/10">
+          <div className="p-5 border-b border-slate-100">
             <div className="flex items-start justify-between">
               <div>
-                <h2 className="text-white font-bold text-lg">{user.name}</h2>
-                <span className="badge badge-blue mt-1">{user.entitas}</span>
-                {user.isGuest && (
-                  <span className="badge badge-gray mt-1 ml-1">Tamu</span>
-                )}
+                <h2 className="text-slate-800 font-bold text-lg">{user.name}</h2>
+                {user.isGuest && <span className="badge badge-gray mt-1">Tamu</span>}
                 {user.email && (
-                  <p className="text-blue-400/70 text-[11px] mt-1 break-all">
+                  <p className="text-slate-400 text-[11px] mt-1 break-all">
                     {user.email}
                   </p>
                 )}
               </div>
               <button
                 onClick={onClose}
-                className="text-blue-400 hover:text-white text-xl leading-none mt-0.5"
+                className="text-slate-400 hover:text-slate-900 text-xl leading-none mt-0.5"
               >
                 ×
               </button>
             </div>
             <div className="mt-3 flex gap-2 flex-wrap items-center">
               {title && <span className="badge badge-gold">{title}</span>}
-              <span className="text-xs text-blue-300">{markedSet.size}/25 sel</span>
+              <span className="text-xs text-slate-500">{markedSet.size}/25 sel</span>
               {checkBingo(markedSet).length > 0 && (
                 <>
-                  <span className="text-blue-500">·</span>
-                  <span className="text-xs text-yellow-300">
+                  <span className="text-slate-300">·</span>
+                  <span className="text-xs text-amber-600">
                     🏆 {checkBingo(markedSet).length} line
                   </span>
                 </>
@@ -157,7 +154,7 @@ function BoardModal({ user, title, board, cells, highlightLines, onClose, onRese
               ))}
             </div>
             {board.length === 0 ? (
-              <p className="text-center text-blue-300/70 text-xs py-6">
+              <p className="text-center text-slate-500 text-xs py-6">
                 Pemain belum membuka papannya.
               </p>
             ) : (
@@ -176,21 +173,9 @@ function BoardModal({ user, title, board, cells, highlightLines, onClose, onRese
                       className={`relative rounded-md overflow-hidden border transition-all ${hasPhoto ? "cursor-pointer hover:brightness-110 hover:scale-105" : ""}`}
                       style={{
                         aspectRatio: "1",
-                        borderColor: isWin
-                          ? "rgba(245,158,11,0.7)"
-                          : isMarked
-                            ? "rgba(0,200,255,0.3)"
-                            : "rgba(0,100,255,0.15)",
-                        background: isWin
-                          ? "rgba(245,158,11,0.15)"
-                          : isFree
-                            ? "rgba(245,158,11,0.1)"
-                            : isMarked
-                              ? "rgba(0,100,255,0.2)"
-                              : "rgba(0,20,60,0.4)",
-                        boxShadow: isWin
-                          ? "0 0 8px rgba(245,158,11,0.4)"
-                          : "none",
+                        borderColor: isWin ? "#ff9f43" : isFree ? "#ffc93c" : isMarked ? "#8ee3d8" : "#f1e6da",
+                        background: isFree ? "#fff4cc" : "#ffffff",
+                        boxShadow: isWin ? "0 0 0 2px #ffd9a8" : "none",
                       }}
                       onClick={
                         hasPhoto
@@ -212,7 +197,7 @@ function BoardModal({ user, title, board, cells, highlightLines, onClose, onRese
                             className="absolute inset-0 w-full h-full object-cover"
                           />
                           {isWin && (
-                            <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-yellow-500 rounded-full flex items-center justify-center">
+                            <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-orange-400 rounded-full flex items-center justify-center">
                               <span className="text-white" style={{ fontSize: "6px" }}>
                                 ★
                               </span>
@@ -222,13 +207,13 @@ function BoardModal({ user, title, board, cells, highlightLines, onClose, onRese
                       ) : isFree ? (
                         <div className="absolute inset-0 flex flex-col items-center justify-center">
                           <span className="text-xs">⭐</span>
-                          <span className="text-[6px] text-yellow-300 font-bold">
+                          <span className="text-[6px] text-amber-600 font-bold">
                             {cell.label || "GARUT"}
                           </span>
                         </div>
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center p-0.5">
-                          <p className="text-[6px] text-blue-300/60 text-center leading-tight">
+                          <p className="text-[6px] text-slate-400 text-center leading-tight">
                             {cell.label}
                           </p>
                         </div>
@@ -240,7 +225,7 @@ function BoardModal({ user, title, board, cells, highlightLines, onClose, onRese
             )}
 
             {Object.values(cellMap).some((v) => v?.photoUrl) && (
-              <p className="text-center text-blue-400/60 text-[10px] mt-2">
+              <p className="text-center text-slate-400 text-[10px] mt-2">
                 Klik sel dengan foto untuk melihat gambar
               </p>
             )}
@@ -271,7 +256,7 @@ function BoardModal({ user, title, board, cells, highlightLines, onClose, onRese
             )}
             <button
               onClick={onClose}
-              className="flex-1 glass-card rounded-xl py-2.5 text-blue-200 text-sm hover:text-white transition-colors"
+              className="flex-1 glass-card rounded-xl py-2.5 text-slate-600 text-sm hover:text-slate-900 transition-colors"
             >
               Tutup
             </button>
@@ -296,7 +281,7 @@ function RankBadge({ i }) {
       className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0"
       style={{
         background:
-          i === 0 ? "#f59e0b" : i === 1 ? "#94a3b8" : i === 2 ? "#cd7f32" : "rgba(0,100,255,0.3)",
+          i === 0 ? "#f59e0b" : i === 1 ? "#94a3b8" : i === 2 ? "#cd7f32" : "#ffb38a",
         color: "white",
       }}
     >
@@ -309,40 +294,39 @@ function RankBadge({ i }) {
 function Leaderboard({ title, icon, rows, eventStart }) {
   return (
     <div className="glass-card rounded-2xl p-4 sm:p-5">
-      <h2 className="text-yellow-300 font-bold text-sm mb-3 flex items-center gap-2">
+      <h2 className="text-amber-600 font-bold text-sm mb-3 flex items-center gap-2">
         <span>{icon}</span> {title}
       </h2>
       {rows.length === 0 ? (
-        <p className="text-blue-300/70 text-xs">Belum ada peserta.</p>
+        <p className="text-slate-500 text-xs">Belum ada peserta.</p>
       ) : (
         <div className="space-y-1">
           {rows.map((r, i) => (
             <div
               key={r.user.id}
-              className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0"
+              className="flex items-center gap-3 py-2 border-b border-slate-100 last:border-0"
             >
               <RankBadge i={i} />
               <div className="flex-1 min-w-0">
-                <p className="text-white text-sm font-medium truncate">{r.user.name}</p>
-                <p className="text-blue-400 text-[10px]">{r.user.entitas}</p>
+                <p className="text-slate-800 text-sm font-medium truncate">{r.user.name}</p>
               </div>
               <div className="text-right">
                 {r.time ? (
                   <>
-                    <p className="text-yellow-300 text-xs font-mono">
+                    <p className="text-amber-600 text-xs font-mono">
                       {new Date(r.time).toLocaleTimeString("id-ID")}
                     </p>
-                    <p className="text-blue-400 text-[10px]">
+                    <p className="text-slate-400 text-[10px]">
                       {elapsed(r.time, eventStart) || new Date(r.time).toLocaleDateString("id-ID")}
                     </p>
                   </>
                 ) : (
-                  <p className="text-blue-300/80 text-[11px]">{r.detail}</p>
+                  <p className="text-slate-500 text-[11px]">{r.detail}</p>
                 )}
               </div>
               <button
                 onClick={r.onView}
-                className="text-[11px] text-blue-300 hover:text-white px-2 py-1 glass-card rounded-lg flex-shrink-0"
+                className="text-[11px] text-slate-500 hover:text-slate-900 px-2 py-1 glass-card rounded-lg flex-shrink-0"
               >
                 {r.viewLabel}
               </button>
@@ -419,10 +403,9 @@ function AdminDashboard() {
   if (loading) {
     return (
       <div className="bingo-bg min-h-screen flex items-center justify-center">
-        <div className="grid-overlay" />
         <div className="relative z-10 text-center">
           <div className="spinner mb-4" />
-          <p className="text-blue-300 text-sm">Memuat data admin...</p>
+          <p className="text-slate-500 text-sm">Memuat data admin...</p>
         </div>
       </div>
     );
@@ -431,7 +414,7 @@ function AdminDashboard() {
   if (!data) {
     return (
       <div className="bingo-bg min-h-screen flex items-center justify-center">
-        <button onClick={loadData} className="relative z-10 glass-card rounded-xl px-4 py-2 text-blue-200 text-sm">
+        <button onClick={loadData} className="relative z-10 glass-card rounded-xl px-4 py-2 text-slate-600 text-sm">
           Gagal memuat data. Coba lagi
         </button>
       </div>
@@ -505,7 +488,6 @@ function AdminDashboard() {
       const matchSearch =
         !q ||
         u.name.toLowerCase().includes(q) ||
-        u.entitas.toLowerCase().includes(q) ||
         (u.email || "").toLowerCase().includes(q);
       if (filter === "bingo") return matchSearch && info[u.id].rec.firstBingoAt;
       if (filter === "full") return matchSearch && info[u.id].rec.fullAt;
@@ -519,36 +501,35 @@ function AdminDashboard() {
         <title>Admin — IDSurvey Bingo</title>
       </Head>
       <div className="bingo-bg min-h-screen">
-        <div className="grid-overlay" />
 
         {/* Navbar */}
         <nav className="navbar relative z-10 px-4 py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="text-blue-400 hover:text-white transition-colors text-sm"
+              className="text-slate-400 hover:text-slate-900 transition-colors text-sm"
             >
               ←
             </Link>
-            <span className="text-white font-bold text-sm">Admin</span>
+            <span className="text-slate-800 font-bold text-sm">Admin</span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleExport}
               disabled={!!exporting}
-              className="text-xs text-blue-300 hover:text-white px-3 py-1.5 glass-card rounded-lg transition-colors disabled:opacity-60"
+              className="text-xs text-slate-500 hover:text-slate-900 px-3 py-1.5 glass-card rounded-lg transition-colors disabled:opacity-60"
             >
               ⬇ Ekspor Foto
             </button>
             <Link
               href="/master"
-              className="text-xs text-blue-300 hover:text-white px-3 py-1.5 glass-card rounded-lg transition-colors"
+              className="text-xs text-slate-500 hover:text-slate-900 px-3 py-1.5 glass-card rounded-lg transition-colors"
             >
               Master
             </Link>
             <button
               onClick={loadData}
-              className="text-xs text-blue-300 hover:text-white px-3 py-1.5 glass-card rounded-lg transition-colors"
+              className="text-xs text-slate-500 hover:text-slate-900 px-3 py-1.5 glass-card rounded-lg transition-colors"
             >
               ↻
             </button>
@@ -570,8 +551,8 @@ function AdminDashboard() {
             ].map((s) => (
               <div key={s.label} className="glass-card rounded-xl p-4 text-center">
                 <div className="text-2xl mb-1">{s.icon}</div>
-                <div className="text-white font-black text-xl">{s.value}</div>
-                <div className="text-blue-400 text-xs mt-0.5">{s.label}</div>
+                <div className="text-slate-800 font-black text-xl">{s.value}</div>
+                <div className="text-slate-400 text-xs mt-0.5">{s.label}</div>
               </div>
             ))}
           </div>
@@ -586,7 +567,7 @@ function AdminDashboard() {
                 key={t.key}
                 onClick={() => setView(t.key)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  view === t.key ? "bg-blue-600 text-white" : "text-blue-300 hover:text-white"
+                  view === t.key ? "bg-orange-400 text-white" : "text-slate-500 hover:text-slate-900"
                 }`}
               >
                 {t.label}
@@ -645,8 +626,8 @@ function AdminDashboard() {
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Cari nama, entitas, atau email..."
-                  className="glass-input rounded-xl px-4 py-2.5 text-white text-sm flex-1"
+                  placeholder="Cari alias atau email..."
+                  className="glass-input rounded-xl px-4 py-2.5 text-slate-800 text-sm flex-1"
                 />
                 <div className="flex gap-1 glass-card rounded-xl p-1">
                   {[
@@ -659,8 +640,8 @@ function AdminDashboard() {
                       onClick={() => setFilter(t.key)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                         filter === t.key
-                          ? "bg-blue-600 text-white"
-                          : "text-blue-300 hover:text-white"
+                          ? "bg-orange-400 text-white"
+                          : "text-slate-500 hover:text-slate-900"
                       }`}
                     >
                       {t.label}
@@ -672,15 +653,14 @@ function AdminDashboard() {
               {/* Users table */}
               <div className="glass-card rounded-2xl overflow-hidden mb-4">
                 {filteredUsers.length === 0 ? (
-                  <div className="p-8 text-center text-blue-300 text-sm">Tidak ada data.</div>
+                  <div className="p-8 text-center text-slate-500 text-sm">Tidak ada data.</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="admin-table">
                       <thead>
                         <tr>
                           <th>#</th>
-                          <th>Nama</th>
-                          <th>Entitas</th>
+                          <th>Alias</th>
                           <th>Progress</th>
                           <th>Papan</th>
                           <th>Status</th>
@@ -694,20 +674,17 @@ function AdminDashboard() {
                           const { cells, filled, lines, rec } = info[u.id];
                           return (
                             <tr key={u.id}>
-                              <td className="text-blue-400 font-mono text-xs">{i + 1}</td>
+                              <td className="text-slate-400 font-mono text-xs">{i + 1}</td>
                               <td>
-                                <div className="font-medium text-white text-sm">
+                                <div className="font-medium text-slate-800 text-sm">
                                   {u.name}
                                   {u.isGuest && (
                                     <span className="badge badge-gray ml-1">Tamu</span>
                                   )}
                                 </div>
-                                <div className="text-blue-400/60 text-[10px]">
+                                <div className="text-slate-400 text-[10px]">
                                   Papan #{boards[u.id]?.round || 1}
                                 </div>
-                              </td>
-                              <td>
-                                <span className="badge badge-blue">{u.entitas}</span>
                               </td>
                               <td>
                                 <div className="flex items-center gap-2">
@@ -717,7 +694,7 @@ function AdminDashboard() {
                                       style={{ width: `${(filled / 25) * 100}%` }}
                                     />
                                   </div>
-                                  <span className="text-xs text-blue-300 font-mono">
+                                  <span className="text-xs text-slate-500 font-mono">
                                     {filled}/25
                                   </span>
                                 </div>
@@ -734,16 +711,16 @@ function AdminDashboard() {
                                   <span className="badge badge-gray">Bermain</span>
                                 )}
                               </td>
-                              <td className="text-[11px] text-yellow-300 font-mono whitespace-nowrap">
+                              <td className="text-[11px] text-amber-600 font-mono whitespace-nowrap">
                                 {rec.firstBingoAt ? fmtTime(rec.firstBingoAt) : "—"}
                               </td>
-                              <td className="text-[11px] text-green-300 font-mono whitespace-nowrap">
+                              <td className="text-[11px] text-teal-600 font-mono whitespace-nowrap">
                                 {rec.fullAt ? fmtTime(rec.fullAt) : "—"}
                               </td>
                               <td>
                                 <button
                                   onClick={() => setModal(currentBoardModal(u))}
-                                  className="text-xs text-blue-400 hover:text-white transition-colors px-2 py-1 glass-card rounded-lg"
+                                  className="text-xs text-slate-400 hover:text-slate-900 transition-colors px-2 py-1 glass-card rounded-lg"
                                 >
                                   Lihat
                                 </button>
@@ -760,7 +737,7 @@ function AdminDashboard() {
           )}
 
           {lastRefresh && (
-            <p className="text-center text-blue-400/40 text-xs">
+            <p className="text-center text-slate-400 text-xs">
               Terakhir diperbarui: {lastRefresh.toLocaleTimeString("id-ID")} ·
               Auto-refresh setiap 30 detik
             </p>
@@ -770,12 +747,12 @@ function AdminDashboard() {
         {modal && <BoardModal {...modal} onClose={() => setModal(null)} />}
 
         {exporting && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[70] p-4">
+          <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-[70] p-4">
             <div className="glass-card rounded-2xl p-8 text-center fade-in max-w-xs">
               <div className="spinner mb-4" />
-              <p className="text-white font-semibold">Mengekspor foto</p>
-              <p className="text-blue-300 text-xs mt-1">{exporting}</p>
-              <p className="text-blue-400/60 text-[10px] mt-3">
+              <p className="text-slate-800 font-semibold">Mengekspor foto</p>
+              <p className="text-slate-500 text-xs mt-1">{exporting}</p>
+              <p className="text-slate-400 text-[10px] mt-3">
                 Jangan tutup halaman ini sampai ZIP terunduh.
               </p>
             </div>

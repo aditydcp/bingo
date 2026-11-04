@@ -2,7 +2,6 @@
 
 export const FREE_POS = 12; // center of the 5×5 grid — always the free (GARUT) cell
 export const LETTERS = ["F", "I", "R", "S", "T"];
-export const ENTITIES = ["PT IDSurvey", "PT SUCOFINDO", "PT SI", "PT BKI"];
 
 // The 12 winning lines: 5 rows, 5 columns, 2 diagonals (board positions)
 export const LINES = [

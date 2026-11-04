@@ -40,7 +40,7 @@ export default function BingoPage() {
   const router = useRouter();
   const fileRef = useRef(null);
 
-  const [user, setUser] = useState(null); // { name, entitas }
+  const [user, setUser] = useState(null); // { name }
   const [isGuest, setIsGuest] = useState(false);
   const [linkError, setLinkError] = useState("");
   const [board, setBoard] = useState(null); // user's personal 25-cell ordered array
@@ -148,7 +148,6 @@ export default function BingoPage() {
       const { firstBingoAt, fullAt } = computeRecords(cells);
       const blob = await renderBoardImage({
         name: user.name,
-        entitas: user.entitas,
         board,
         cells,
         highlightLines: winLines,
@@ -235,10 +234,9 @@ export default function BingoPage() {
   if (!user || !board) {
     return (
       <div className="bingo-bg min-h-screen flex items-center justify-center">
-        <div className="grid-overlay" />
         <div className="relative z-10 text-center">
           <div className="spinner mb-4" />
-          <p className="text-blue-300 text-sm">Memuat bingo board...</p>
+          <p className="text-slate-500 text-sm">Memuat bingo board...</p>
         </div>
       </div>
     );
@@ -250,26 +248,19 @@ export default function BingoPage() {
         <title>Bingo — {user.name}</title>
       </Head>
       <div className="bingo-bg min-h-screen">
-        <div className="grid-overlay" />
 
         {/* Navbar */}
         <nav className="navbar relative z-10 px-4 py-3 flex items-center justify-between">
           <div>
-            <span className="text-white font-bold text-sm">
-              FIRST SUMMIT Bingo
-            </span>
-            <span className="ml-2 text-blue-400 text-xs">
-              '{new Date().getFullYear().toString().slice(2)}
+            <span className="font-black text-base text-slate-800">
+              FIRST <span className="text-orange-500">Bingo</span> 🎉
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="text-right">
-              <p className="text-white text-xs font-medium">{user.name}</p>
-              <p className="text-blue-400 text-[10px]">{user.entitas}</p>
-            </div>
+            <span className="badge badge-gold max-w-[9rem] truncate">{user.name}</span>
             <button
               onClick={handleSignOut}
-              className="text-blue-400 hover:text-white text-xs transition-colors px-2 py-1"
+              className="text-slate-400 hover:text-slate-900 text-xs transition-colors px-2 py-1"
             >
               Keluar
             </button>
@@ -279,26 +270,26 @@ export default function BingoPage() {
         <div className="relative z-10 px-3 pb-8 max-w-xl mx-auto">
           {/* Event window */}
           {status === "before" && (
-            <div className="glass-card rounded-xl p-3 mt-3 text-center border border-cyan-500/30">
-              <p className="text-blue-200 text-xs">Event dimulai dalam</p>
-              <p className="text-cyan-300 font-mono font-bold text-xl mt-0.5">
+            <div className="glass-card rounded-xl p-3 mt-3 text-center border border-orange-200">
+              <p className="text-slate-600 text-xs">Event dimulai dalam</p>
+              <p className="text-orange-500 font-mono font-bold text-xl mt-0.5">
                 {countdown(new Date(event.start).getTime() - (now + clockOffset))}
               </p>
-              <p className="text-blue-400/70 text-[10px] mt-1">
+              <p className="text-slate-400 text-[10px] mt-1">
                 {formatTime(event.start)} · Kamu sudah bisa melihat papan dan mengacak ulang
               </p>
             </div>
           )}
           {status === "after" && (
-            <div className="glass-card rounded-xl p-3 mt-3 text-center border border-red-500/30">
-              <p className="text-red-300 font-semibold text-sm">Event telah selesai</p>
-              <p className="text-blue-300/70 text-xs mt-0.5">Foto tidak bisa ditambah atau diganti lagi.</p>
+            <div className="glass-card rounded-xl p-3 mt-3 text-center border border-rose-200">
+              <p className="text-rose-600 font-semibold text-sm">Event telah selesai</p>
+              <p className="text-slate-500 text-xs mt-0.5">Foto tidak bisa ditambah atau diganti lagi.</p>
             </div>
           )}
           {status === "open" && event.end && (
-            <p className="text-center text-blue-300/70 text-[11px] mt-3">
+            <p className="text-center text-slate-500 text-[11px] mt-3">
               Event berakhir dalam{" "}
-              <span className="font-mono text-cyan-300">
+              <span className="font-mono text-orange-500">
                 {countdown(new Date(event.end).getTime() - (now + clockOffset))}
               </span>
             </p>
@@ -306,8 +297,8 @@ export default function BingoPage() {
 
           {/* Guest → Google upgrade */}
           {isGuest && (
-            <div className="glass-card rounded-xl p-3 mt-3 border border-yellow-500/30">
-              <p className="text-yellow-200 text-xs mb-2">
+            <div className="glass-card rounded-xl p-3 mt-3 border border-amber-200">
+              <p className="text-amber-700 text-xs mb-2">
                 Kamu bermain sebagai tamu — progres hanya tersimpan di perangkat
                 ini. Hubungkan Google agar progres aman dan bisa dibuka di
                 perangkat lain.
@@ -316,13 +307,13 @@ export default function BingoPage() {
             </div>
           )}
           {linkError && (
-            <div className="mt-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">
+            <div className="mt-3 px-4 py-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs">
               {linkError}
             </div>
           )}
           {notice && (
             <div
-              className="mt-3 px-4 py-3 rounded-xl bg-blue-500/10 border border-blue-400/30 text-blue-200 text-xs"
+              className="mt-3 px-4 py-3 rounded-xl bg-sky-50 border border-sky-200 text-slate-600 text-xs"
               onClick={() => setNotice("")}
             >
               {notice}
@@ -332,10 +323,10 @@ export default function BingoPage() {
           {/* Bingo banner */}
           {hasBingo && (
             <div className="bingo-banner rounded-xl p-3 my-3 text-center fade-in">
-              <p className="text-xl font-black text-yellow-300 tracking-widest">
+              <p className="text-xl font-black text-amber-600 tracking-widest">
                 🎉 B I N G O !
               </p>
-              <p className="text-blue-200 text-xs mt-1">
+              <p className="text-slate-600 text-xs mt-1">
                 {winLines.length} line selesai
                 {markedCount < 25 && " · Lanjutkan sampai papan penuh!"}
               </p>
@@ -350,7 +341,7 @@ export default function BingoPage() {
                 style={{ width: `${(markedCount / 25) * 100}%` }}
               />
             </div>
-            <span className="text-blue-300 text-xs font-mono whitespace-nowrap">
+            <span className="text-slate-500 text-xs font-mono whitespace-nowrap">
               {markedCount}/25
             </span>
           </div>
@@ -391,18 +382,18 @@ export default function BingoPage() {
                   ) : isFree ? (
                     <div className="flex flex-col items-center gap-0.5">
                       <span className="text-lg">⭐</span>
-                      <span className="text-[9px] font-bold text-yellow-300 tracking-widest">
+                      <span className="text-[9px] font-bold text-amber-600 tracking-widest">
                         {cell.label || "GARUT"}
                       </span>
                     </div>
                   ) : (
                     <div className="p-1 flex flex-col items-center justify-center h-full">
-                      <p className="text-[9px] leading-tight text-center text-blue-100">
+                      <p className="text-[9px] leading-tight text-center text-slate-700">
                         {cell.label}
                       </p>
                       {canUpload && (
-                        <div className="mt-1 w-4 h-4 rounded-full border border-blue-400/40 flex items-center justify-center">
-                          <span className="text-[8px] text-blue-400">📷</span>
+                        <div className="mt-1 w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center">
+                          <span className="text-[8px] text-slate-400">📷</span>
                         </div>
                       )}
                     </div>
@@ -415,30 +406,30 @@ export default function BingoPage() {
           {/* Recorded times */}
           {(records.firstBingoAt || records.fullAt) && (
             <div className="glass-card rounded-xl p-4 mt-4 space-y-2">
-              <p className="text-white font-semibold text-sm">🏅 Rekor kamu</p>
+              <p className="text-slate-800 font-semibold text-sm">🏅 Rekor kamu</p>
               {records.firstBingoAt && (
                 <div className="flex justify-between gap-3 text-xs">
-                  <span className="text-blue-300">Bingo pertama</span>
-                  <span className="text-yellow-300 text-right">
+                  <span className="text-slate-500">Bingo pertama</span>
+                  <span className="text-amber-600 text-right">
                     {new Date(records.firstBingoAt).toLocaleString("id-ID")}
                     {records.firstBingoRound !== round && (
-                      <span className="text-blue-400/70"> (papan sebelumnya)</span>
+                      <span className="text-slate-400"> (papan sebelumnya)</span>
                     )}
                   </span>
                 </div>
               )}
               {records.fullAt && (
                 <div className="flex justify-between gap-3 text-xs">
-                  <span className="text-blue-300">Papan penuh</span>
-                  <span className="text-green-300 text-right">
+                  <span className="text-slate-500">Papan penuh</span>
+                  <span className="text-teal-600 text-right">
                     {new Date(records.fullAt).toLocaleString("id-ID")}
                     {records.fullRound !== round && (
-                      <span className="text-blue-400/70"> (papan sebelumnya)</span>
+                      <span className="text-slate-400"> (papan sebelumnya)</span>
                     )}
                   </span>
                 </div>
               )}
-              <p className="text-blue-400/60 text-[10px]">
+              <p className="text-slate-400 text-[10px]">
                 Mengganti foto di line yang menang akan memperbarui waktu rekor.
               </p>
             </div>
@@ -447,7 +438,7 @@ export default function BingoPage() {
           {hasBingo && (
             <button
               onClick={downloadBingoCard}
-              className="mt-4 w-full glass-card rounded-xl py-3 text-cyan-300 text-sm font-semibold hover:text-white transition-colors border border-cyan-500/30 hover:border-cyan-400/60"
+              className="mt-4 w-full glass-card rounded-xl py-3 text-orange-500 text-sm font-semibold hover:text-slate-900 transition-colors border border-orange-200 hover:border-orange-300"
             >
               ⬇ Unduh Kartu Bingo
             </button>
@@ -456,25 +447,24 @@ export default function BingoPage() {
           <button
             onClick={handleReroll}
             disabled={rerolling || uploading}
-            className="mt-3 w-full glass-card rounded-xl py-3 text-blue-200 text-sm hover:text-white transition-colors disabled:opacity-50"
+            className="mt-3 w-full glass-card rounded-xl py-3 text-slate-600 text-sm hover:text-slate-900 transition-colors disabled:opacity-50"
           >
             {rerolling ? "Mengacak..." : "🔀 Acak Ulang Papan"}
           </button>
 
           {/* Legend */}
           <div className="mt-5 flex gap-4 justify-center">
-            <span className="flex items-center gap-1.5 text-[10px] text-blue-400">
-              <span className="w-3 h-3 rounded-sm bg-blue-600/40 border border-blue-500/30" />
+            <span className="flex items-center gap-1.5 text-[10px] text-slate-400">
+              <span className="w-3 h-3 rounded-sm bg-white border border-slate-200" />
               Belum
             </span>
-            <span className="flex items-center gap-1.5 text-[10px] text-blue-300">
-              <span className="w-3 h-3 rounded-sm bg-blue-500/50 border border-cyan-400/30" />
+            <span className="flex items-center gap-1.5 text-[10px] text-slate-500">
+              <span className="w-3 h-3 rounded-sm bg-teal-100 border border-teal-300" />
               Selesai
             </span>
-            <span className="flex items-center gap-1.5 text-[10px] text-yellow-300">
+            <span className="flex items-center gap-1.5 text-[10px] text-amber-600">
               <span
-                className="w-3 h-3 rounded-sm border border-yellow-400/60"
-                style={{ background: "rgba(245,158,11,0.25)" }}
+                className="w-3 h-3 rounded-sm border border-amber-400 bg-amber-100"
               />
               Bingo!
             </span>
@@ -493,22 +483,22 @@ export default function BingoPage() {
 
         {/* Download overlay */}
         {downloading && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-50">
             <div className="glass-card rounded-2xl p-8 text-center fade-in">
               <div className="spinner mb-4" />
-              <p className="text-white font-semibold">Membuat kartu bingo...</p>
-              <p className="text-blue-300 text-xs mt-1">Mohon tunggu</p>
+              <p className="text-slate-800 font-semibold">Membuat kartu bingo...</p>
+              <p className="text-slate-500 text-xs mt-1">Mohon tunggu</p>
             </div>
           </div>
         )}
 
         {/* Upload overlay */}
         {uploading && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-50">
             <div className="glass-card rounded-2xl p-8 text-center fade-in">
               <div className="spinner mb-4" />
-              <p className="text-white font-semibold">Mengunggah foto...</p>
-              <p className="text-blue-300 text-xs mt-1">Mohon tunggu</p>
+              <p className="text-slate-800 font-semibold">Mengunggah foto...</p>
+              <p className="text-slate-500 text-xs mt-1">Mohon tunggu</p>
             </div>
           </div>
         )}
@@ -524,7 +514,7 @@ export default function BingoPage() {
         {/* Photo preview modal */}
         {previewCell !== null && (
           <div
-            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4"
             onClick={() => setPreviewCell(null)}
           >
             <div
@@ -538,18 +528,18 @@ export default function BingoPage() {
                   className="w-full"
                 />
                 <div className="p-4">
-                  <p className="text-white text-sm font-medium">
+                  <p className="text-slate-800 text-sm font-medium">
                     {board[previewCell]?.label}
                   </p>
                   {cells[previewCell]?.markedAt && (
-                    <p className="text-blue-300 text-xs mt-1">
+                    <p className="text-slate-500 text-xs mt-1">
                       {new Date(cells[previewCell].markedAt).toLocaleString(
                         "id-ID",
                       )}
                     </p>
                   )}
                   {winSet.has(previewCell) && canUpload && (
-                    <p className="text-yellow-300/80 text-[11px] mt-2">
+                    <p className="text-amber-600 text-[11px] mt-2">
                       Sel ini bagian dari line Bingo. Mengganti fotonya akan
                       memperbarui waktu rekor kamu.
                     </p>
@@ -564,14 +554,14 @@ export default function BingoPage() {
                       setPreviewCell(null);
                       setTimeout(() => openCamera(pos), 50);
                     }}
-                    className="flex-1 glass-card rounded-xl py-2.5 text-blue-300 text-sm hover:text-white transition-colors text-center"
+                    className="flex-1 glass-card rounded-xl py-2.5 text-slate-500 text-sm hover:text-slate-900 transition-colors text-center"
                   >
                     Ganti Foto
                   </button>
                 )}
                 <button
                   onClick={() => setPreviewCell(null)}
-                  className="flex-1 glass-card rounded-xl py-2.5 text-blue-200 text-sm hover:text-white transition-colors text-center"
+                  className="flex-1 glass-card rounded-xl py-2.5 text-slate-600 text-sm hover:text-slate-900 transition-colors text-center"
                 >
                   Tutup
                 </button>

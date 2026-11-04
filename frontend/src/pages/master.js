@@ -93,23 +93,22 @@ function MasterPanel() {
         <title>Master Panel — IDSurvey Bingo</title>
       </Head>
       <div className="bingo-bg min-h-screen">
-        <div className="grid-overlay" />
 
         {/* Navbar */}
         <nav className="navbar relative z-10 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="text-blue-400 hover:text-white transition-colors text-sm"
+              className="text-slate-400 hover:text-slate-900 transition-colors text-sm"
             >
               ← Beranda
             </Link>
-            <span className="text-white font-bold text-sm">Master Panel</span>
+            <span className="text-slate-800 font-bold text-sm">Master Panel</span>
           </div>
           <div className="flex items-center gap-2">
             <Link
               href="/admin"
-              className="text-xs text-blue-300 hover:text-white px-3 py-1.5 glass-card rounded-lg transition-colors"
+              className="text-xs text-slate-500 hover:text-slate-900 px-3 py-1.5 glass-card rounded-lg transition-colors"
             >
               Admin View
             </Link>
@@ -119,15 +118,15 @@ function MasterPanel() {
         <div className="relative z-10 px-4 py-6 max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-6">
-            <h1 className="text-2xl font-black text-white">
+            <h1 className="text-2xl font-black text-slate-800">
               Bingo Master Panel
             </h1>
-            <p className="text-blue-300 text-sm mt-1">
+            <p className="text-slate-500 text-sm mt-1">
               Atur waktu event dan label sel. Setiap peserta mendapat 24 sel
               acak dari pool ini + GARUT di tengah. Perubahan label langsung
               berlaku di semua papan.
             </p>
-            <p className="text-blue-300/70 text-xs mt-2">
+            <p className="text-slate-500 text-xs mt-2">
               📌 Selalu ada: sel muncul di setiap papan. 🔷 Grup: setiap papan
               memuat minimal 1 sel dari grup. Aturan hanya berlaku untuk papan
               yang dibuat atau diacak ulang setelah disimpan.
@@ -137,7 +136,7 @@ function MasterPanel() {
           {/* Event window */}
           <div className="glass-card rounded-2xl p-5 mb-6">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-white font-semibold text-sm">⏱ Waktu Event</h2>
+              <h2 className="text-slate-800 font-semibold text-sm">⏱ Waktu Event</h2>
               <span
                 className={`badge ${
                   status === "open" ? "badge-green" : status === "before" ? "badge-blue" : "badge-gray"
@@ -146,7 +145,7 @@ function MasterPanel() {
                 {{ before: "Belum mulai", open: "Berlangsung", after: "Selesai" }[status]}
               </span>
             </div>
-            <p className="text-blue-300/70 text-xs mb-4">
+            <p className="text-slate-500 text-xs mb-4">
               Peserta hanya bisa mengunggah foto di antara waktu ini. Kosongkan
               untuk tanpa batas. Waktu mengikuti zona waktu perangkat ini.
             </p>
@@ -156,7 +155,7 @@ function MasterPanel() {
                 { label: "Selesai", value: eventEnd, set: setEventEnd },
               ].map((f) => (
                 <label key={f.label} className="block">
-                  <span className="block text-blue-200 text-xs font-medium mb-1.5">
+                  <span className="block text-slate-600 text-xs font-medium mb-1.5">
                     {f.label}
                   </span>
                   <div className="flex gap-2">
@@ -167,8 +166,8 @@ function MasterPanel() {
                         f.set(e.target.value);
                         setSaved(false);
                       }}
-                      className="flex-1 glass-input rounded-lg px-3 py-2 text-white text-sm"
-                      style={{ colorScheme: "dark" }}
+                      className="flex-1 glass-input rounded-lg px-3 py-2 text-slate-800 text-sm"
+                      style={{ colorScheme: "light" }}
                     />
                     {f.value && (
                       <button
@@ -176,7 +175,7 @@ function MasterPanel() {
                           f.set("");
                           setSaved(false);
                         }}
-                        className="text-blue-400 hover:text-white text-xs px-2"
+                        className="text-slate-400 hover:text-slate-900 text-xs px-2"
                       >
                         ×
                       </button>
@@ -185,7 +184,7 @@ function MasterPanel() {
                 </label>
               ))}
             </div>
-            {timeError && <p className="text-red-300 text-xs mt-2">{timeError}</p>}
+            {timeError && <p className="text-rose-600 text-xs mt-2">{timeError}</p>}
           </div>
 
           {/* Quick info */}
@@ -200,8 +199,8 @@ function MasterPanel() {
                 className="glass-card rounded-xl p-3 text-center"
               >
                 <div className="text-lg mb-1">{s.icon}</div>
-                <div className="text-white font-bold text-sm">{s.value}</div>
-                <div className="text-blue-400 text-[10px]">{s.label}</div>
+                <div className="text-slate-800 font-bold text-sm">{s.value}</div>
+                <div className="text-slate-400 text-[10px]">{s.label}</div>
               </div>
             ))}
           </div>
@@ -210,7 +209,7 @@ function MasterPanel() {
           {cells.length > 0 && (
             <div className="glass-card rounded-2xl p-4 mb-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-white font-semibold text-sm">
+                <h2 className="text-slate-800 font-semibold text-sm">
                   Pool Sel
                 </h2>
               </div>
@@ -225,10 +224,10 @@ function MasterPanel() {
                       key={cell.id}
                       className={`relative rounded-lg border transition-all cursor-pointer ${
                         isFree
-                          ? "border-yellow-500/50 bg-yellow-500/10"
+                          ? "border-amber-300 bg-amber-50"
                           : isSelected
-                            ? "border-cyan-400/70 bg-blue-500/20"
-                            : "border-blue-500/20 bg-blue-900/20 hover:border-blue-400/40"
+                            ? "border-orange-400 bg-orange-50"
+                            : "border-slate-200 bg-white hover:border-orange-200"
                       }`}
                       style={{ aspectRatio: "1" }}
                       onClick={() =>
@@ -239,18 +238,18 @@ function MasterPanel() {
                         {isFree ? (
                           <div className="text-center">
                             <div className="text-xl">⭐</div>
-                            <div className="text-[9px] text-yellow-300 font-bold">
+                            <div className="text-[9px] text-amber-600 font-bold">
                               {cell.label}
                             </div>
                           </div>
                         ) : (
-                          <p className="text-[8px] text-blue-100 text-center leading-tight line-clamp-3">
+                          <p className="text-[8px] text-slate-700 text-center leading-tight line-clamp-3">
                             {cell.label}
                           </p>
                         )}
                       </div>
                       {!isFree && (
-                        <div className="absolute top-0.5 right-0.5 text-[8px] text-blue-500">
+                        <div className="absolute top-0.5 right-0.5 text-[8px] text-slate-300">
                           {cell.id + 1}
                         </div>
                       )}
@@ -268,14 +267,14 @@ function MasterPanel() {
 
           {/* Edit panel */}
           {selectedCell !== null && (
-            <div className="glass-card rounded-2xl p-5 mb-6 fade-in border border-cyan-500/30">
+            <div className="glass-card rounded-2xl p-5 mb-6 fade-in border border-orange-200">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-white font-semibold text-sm">
+                <h2 className="text-slate-800 font-semibold text-sm">
                   Edit Sel #{selectedCell + 1}
                 </h2>
                 <button
                   onClick={() => setSelectedCell(null)}
-                  className="text-blue-400 hover:text-white text-xs"
+                  className="text-slate-400 hover:text-slate-900 text-xs"
                 >
                   Tutup ×
                 </button>
@@ -283,12 +282,12 @@ function MasterPanel() {
               <textarea
                 value={selected?.label || ""}
                 onChange={(e) => updateLabel(selectedCell, e.target.value)}
-                className="w-full glass-input rounded-xl px-4 py-3 text-white text-sm resize-none"
+                className="w-full glass-input rounded-xl px-4 py-3 text-slate-800 text-sm resize-none"
                 rows={3}
                 placeholder="Label untuk sel ini..."
                 maxLength={80}
               />
-              <p className="text-blue-400/50 text-xs mt-1 text-right">
+              <p className="text-slate-400 text-xs mt-1 text-right">
                 {selected?.label?.length || 0}/80
               </p>
               <div className="flex gap-2 mt-2">
@@ -298,8 +297,8 @@ function MasterPanel() {
                     onClick={() => updateRule(selectedCell, o.value)}
                     className={`flex-1 rounded-lg py-2 text-xs transition-colors ${
                       (selected?.rule || "") === o.value
-                        ? "bg-blue-500/40 text-white border border-cyan-400/60"
-                        : "glass-card text-blue-300 hover:text-white"
+                        ? "bg-orange-100 text-slate-800 border border-orange-400"
+                        : "glass-card text-slate-500 hover:text-slate-900"
                     }`}
                   >
                     {o.label}
@@ -311,7 +310,7 @@ function MasterPanel() {
 
           {/* All cells list */}
           <div className="glass-card rounded-2xl p-5 mb-6">
-            <h2 className="text-white font-semibold text-sm mb-4">
+            <h2 className="text-slate-800 font-semibold text-sm mb-4">
               Semua Label Sel
             </h2>
             <div className="space-y-2">
@@ -322,16 +321,14 @@ function MasterPanel() {
                     <div
                       className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold"
                       style={{
-                        background: isFree
-                          ? "rgba(245,158,11,0.2)"
-                          : "rgba(0,100,255,0.15)",
-                        color: isFree ? "#fbbf24" : "#93c5fd",
+                        background: isFree ? "#fff1c9" : "#ffe9dc",
+                        color: isFree ? "#b45309" : "#c2410c",
                       }}
                     >
                       {cell.id + 1}
                     </div>
                     {isFree ? (
-                      <div className="flex-1 py-1.5 px-3 rounded-lg text-sm text-yellow-300 bg-yellow-500/10 border border-yellow-500/20">
+                      <div className="flex-1 py-1.5 px-3 rounded-lg text-sm text-amber-600 bg-amber-50 border border-amber-200">
                         ⭐ {cell.label} — sel gratis di tengah (tidak dapat diubah)
                       </div>
                     ) : (
@@ -341,15 +338,15 @@ function MasterPanel() {
                           value={cell.label}
                           onChange={(e) => updateLabel(cell.id, e.target.value)}
                           onFocus={() => setSelectedCell(cell.id)}
-                          className="flex-1 min-w-0 glass-input rounded-lg px-3 py-1.5 text-white text-sm"
+                          className="flex-1 min-w-0 glass-input rounded-lg px-3 py-1.5 text-slate-800 text-sm"
                           placeholder={`Label sel ${cell.id + 1}...`}
                           maxLength={80}
                         />
                         <select
                           value={cell.rule || ""}
                           onChange={(e) => updateRule(cell.id, e.target.value)}
-                          className="glass-input rounded-lg px-2 py-1.5 text-white text-xs flex-shrink-0"
-                          style={{ colorScheme: "dark" }}
+                          className="glass-input rounded-lg px-2 py-1.5 text-slate-800 text-xs flex-shrink-0"
+                          style={{ colorScheme: "light" }}
                         >
                           {RULE_OPTIONS.map((o) => (
                             <option key={o.value} value={o.value}>
@@ -366,13 +363,13 @@ function MasterPanel() {
           </div>
 
           {/* Save button */}
-          {ruleError && <p className="text-red-300 text-xs mb-2">{ruleError}</p>}
+          {ruleError && <p className="text-rose-600 text-xs mb-2">{ruleError}</p>}
           <div className="sticky bottom-4 flex gap-3">
             <button
               onClick={handleSave}
               disabled={saving || !!timeError || !!ruleError}
               className={`flex-1 rounded-xl py-4 font-bold text-sm transition-all ${
-                saved ? "bg-green-500/80 text-white" : "btn-primary text-white"
+                saved ? "bg-teal-500 text-white" : "btn-primary text-white"
               }`}
             >
               {saving ? (
