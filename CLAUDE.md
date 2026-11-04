@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Mobile-first photo-bingo web app ("Piknik Bingo") for the Piknik DTI 2026 trip to Garut (~34 players). UI text is Indonesian. Everything runs on free tiers: **Vercel** hosts the Next.js app (pages router, plain JS, Tailwind) in `frontend/`; **Supabase** provides Postgres + Auth; **Cloudinary** stores photos. There is no separate backend — server logic lives in `frontend/src/pages/api/`. Setup steps for all three services are in `README.md`.
 
-There are no tests or linters configured.
+Tests use Vitest (no linter). Unit tests (`frontend/tests/unit`) cover the pure logic; integration tests (`frontend/tests/integration`) call the API route handlers in-process with a minimal req/res mock against the **real** Supabase + Cloudinary from `frontend/.env`. They create their own users (magic-link sign-in, so CAPTCHA settings don't matter; guests need anonymous sign-ins enabled), swap in a test cell pool via `saveConfig`/`setConfig`/`restoreConfig`, and delete everything they created in `cleanup()`.
 
 ## Commands
 
@@ -14,6 +14,10 @@ All from `frontend/` (needs `.env.local`, see `frontend/.env.example`):
 ```bash
 npm run dev     # http://localhost:3000
 npm run build   # production build — use this to check compile errors
+npm test                  # all tests (~5 min; integration tests hit the real services)
+npm run test:unit         # pure logic only, ~1 s, no network
+npx vitest run tests/integration/play.test.js -t "reroll"   # one file / one test
+npm run wipe              # dry run: counts players' data; add -- --yes to delete it
 ```
 Database schema: `supabase/schema.sql`, run manually in the Supabase SQL editor (no migration tooling).
 

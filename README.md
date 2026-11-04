@@ -93,6 +93,25 @@ npm install
 npm run dev                  # http://localhost:3000
 ```
 
+### Tests
+
+```bash
+npm run test:unit            # game logic, no network
+npm test                     # everything; integration tests use the real Supabase + Cloudinary in .env
+```
+
+Integration tests create their own throwaway players and delete them (and their photos) afterwards, and restore the master config. Guest tests need **Allow anonymous sign-ins** enabled.
+
+### Wiping all data
+
+```bash
+npm run wipe                 # dry run: shows what would be deleted
+npm run wipe -- --yes        # deletes all players, boards, marks, records, history and bingo/ photos
+npm run wipe -- --yes --include-admins   # also delete admin accounts
+```
+
+The cell pool and event window (`master_config`) are kept. Use this to clear test data before the event.
+
 ## Free-tier notes
 
 - Supabase pauses projects after 7 days without activity — open the app (or the dashboard) shortly before the event.
