@@ -1,14 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="96" fill="#fffaf2"/>
-  <g>
-    <rect x="96" y="96" width="96" height="96" rx="20" fill="#ffe3d3"/>
-    <rect x="208" y="96" width="96" height="96" rx="20" fill="#ff6b6b"/>
-    <rect x="320" y="96" width="96" height="96" rx="20" fill="#ffe3d3"/>
-    <rect x="96" y="208" width="96" height="96" rx="20" fill="#ff9f43"/>
-    <rect x="208" y="208" width="96" height="96" rx="20" fill="#ffc93c"/>
-    <rect x="320" y="208" width="96" height="96" rx="20" fill="#2ec4b6"/>
-    <rect x="96" y="320" width="96" height="96" rx="20" fill="#ffe3d3"/>
-    <rect x="208" y="320" width="96" height="96" rx="20" fill="#4d96ff"/>
-    <rect x="320" y="320" width="96" height="96" rx="20" fill="#ffe3d3"/>
+  <g transform="translate(64 64) scale(6)">
+    <circle cx="44" cy="19" r="11" fill="#ffc93c"/>
+    <path d="M2 54 L24 22 L46 54 Z" fill="#2ec4b6"/>
+    <path d="M24 22 L30.5 31.5 L27 34 L24 30 L20.5 34 L17.5 31.5 Z" fill="#ffffff"/>
+    <path d="M22 54 L42 30 L62 54 Z" fill="#ff9f43"/>
+    <rect x="2" y="52" width="60" height="4" rx="2" fill="#ff6b6b"/>
   </g>
 </svg>

@@ -1,6 +1,6 @@
-# IDSurvey FIRST Summit '26 — Bingo App
+# Piknik Bingo — Piknik DTI 2026, Garut
 
-Mobile-first photo bingo. Players sign in with Google (or as a guest), get a random 5×5 board (F-I-R-S-T), and fill cells by taking photos. Runs entirely on free tiers:
+Mobile-first photo bingo. Players sign in with Google (or as a guest), get a random 5×5 board (B-I-N-G-O), and fill cells by taking photos. Runs entirely on free tiers:
 
 | Part | Service |
 |---|---|

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Mobile-first photo-bingo web app for the IDSurvey FIRST Summit '26 (~34 players). UI text is Indonesian. Everything runs on free tiers: **Vercel** hosts the Next.js app (pages router, plain JS, Tailwind) in `frontend/`; **Supabase** provides Postgres + Auth; **Cloudinary** stores photos. There is no separate backend — server logic lives in `frontend/src/pages/api/`. Setup steps for all three services are in `README.md`.
+Mobile-first photo-bingo web app ("Piknik Bingo") for the Piknik DTI 2026 trip to Garut (~34 players). UI text is Indonesian. Everything runs on free tiers: **Vercel** hosts the Next.js app (pages router, plain JS, Tailwind) in `frontend/`; **Supabase** provides Postgres + Auth; **Cloudinary** stores photos. There is no separate backend — server logic lives in `frontend/src/pages/api/`. Setup steps for all three services are in `README.md`.
 
 There are no tests or linters configured.
 

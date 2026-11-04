@@ -96,10 +96,15 @@ export async function renderBoardImage({ name, board, cells, highlightLines = []
   ctx.textAlign = "left";
   ctx.font = `900 34px ${FONT}`;
   ctx.fillStyle = INK;
-  ctx.fillText("FIRST", PAD, 62);
-  const firstW = ctx.measureText("FIRST ").width;
+  ctx.fillText("Piknik", PAD, 62);
+  const firstW = ctx.measureText("Piknik ").width;
   ctx.fillStyle = "#ff9f43";
   ctx.fillText("Bingo", PAD + firstW, 62);
+  ctx.textAlign = "right";
+  ctx.font = `800 13px ${FONT}`;
+  ctx.fillStyle = "#0f8a7e";
+  ctx.fillText("PIKNIK DTI 2026 · GARUT", W - PAD, 58);
+  ctx.textAlign = "left";
 
   // player alias
   ctx.font = `800 20px ${FONT}`;
@@ -111,7 +116,7 @@ export async function renderBoardImage({ name, board, cells, highlightLines = []
   HEADER_COLORS.forEach((c, i) => divGrad.addColorStop(i / 4, c));
   rrFill(ctx, PAD, 124, W - PAD * 2, 5, 2.5, divGrad);
 
-  // FIRST header row
+  // B I N G O header row
   for (let c = 0; c < 5; c++) {
     const x = PAD + c * (cellSize + GAP);
     const y = topH;
@@ -208,7 +213,7 @@ export async function renderBoardImage({ name, board, cells, highlightLines = []
   }
   ctx.font = `700 10px ${FONT}`;
   ctx.fillStyle = "#cbd5e1";
-  ctx.fillText("FIRST Summit Bingo", W / 2, fy + 46);
+  ctx.fillText("Piknik Bingo · Piknik DTI 2026 Garut", W / 2, fy + 46);
 
   return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
 }

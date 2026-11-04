@@ -16,6 +16,7 @@ import { compressImage } from "../lib/compressImage";
 import { renderBoardImage, formatTime } from "../lib/boardImage";
 import GoogleButton from "../components/GoogleButton";
 import Celebration from "../components/Celebration";
+import Logo from "../components/Logo";
 
 const ERROR_TEXT = {
   event_not_started: "Event belum dimulai. Foto bisa diunggah saat event berlangsung.",
@@ -251,11 +252,7 @@ export default function BingoPage() {
 
         {/* Navbar */}
         <nav className="navbar relative z-10 px-4 py-3 flex items-center justify-between">
-          <div>
-            <span className="font-black text-base text-slate-800">
-              FIRST <span className="text-orange-500">Bingo</span> 🎉
-            </span>
-          </div>
+          <Logo />
           <div className="flex items-center gap-3">
             <span className="badge badge-gold max-w-[9rem] truncate">{user.name}</span>
             <button

@@ -8,7 +8,7 @@ export default function Document() {
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="FIRST Bingo" />
+        <meta name="apple-mobile-web-app-title" content="Piknik Bingo" />
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
       </Head>

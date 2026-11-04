@@ -90,7 +90,7 @@ function MasterPanel() {
   return (
     <>
       <Head>
-        <title>Master Panel — IDSurvey Bingo</title>
+        <title>Master Panel — Piknik Bingo</title>
       </Head>
       <div className="bingo-bg min-h-screen">
 

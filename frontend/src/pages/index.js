@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
-import { LETTERS } from "../lib/bingo";
 import { api, getSession, signInWithGoogle, supabase } from "../lib/supabase";
 import GoogleButton from "../components/GoogleButton";
+import Logo from "../components/Logo";
 
 const ERROR_TEXT = {
   alias_taken: "Alias ini sudah dipakai pemain lain. Coba alias lain.",
@@ -83,27 +83,17 @@ export default function RegisterPage() {
   return (
     <>
       <Head>
-        <title>FIRST Bingo</title>
+        <title>Piknik Bingo</title>
       </Head>
       <div className="bingo-bg min-h-screen flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md fade-in">
           {/* Branding */}
           <div className="text-center mb-8">
-            <div className="grid grid-cols-5 gap-2 max-w-[260px] mx-auto">
-              {LETTERS.map((l, i) => (
-                <div
-                  key={l}
-                  className="bingo-header-cell shadow-sm"
-                  style={{ transform: `rotate(${[-6, 4, -3, 5, -4][i]}deg)` }}
-                >
-                  {l}
-                </div>
-              ))}
-            </div>
-            <h1 className="text-4xl font-black text-slate-800 mt-4 tracking-wide">
-              BINGO! 🎉
-            </h1>
-            <p className="text-slate-500 text-sm mt-1">
+            <Logo size="lg" />
+            <p className="inline-block mt-3 px-3 py-1 rounded-full bg-teal-50 text-teal-700 text-xs font-extrabold tracking-wide">
+              PIKNIK DTI 2026 · GARUT
+            </p>
+            <p className="text-slate-500 text-sm mt-2">
               Foto-foto seru, isi papanmu, kejar Bingo!
             </p>
           </div>

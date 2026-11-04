@@ -498,7 +498,7 @@ function AdminDashboard() {
   return (
     <>
       <Head>
-        <title>Admin — IDSurvey Bingo</title>
+        <title>Admin — Piknik Bingo</title>
       </Head>
       <div className="bingo-bg min-h-screen">
 
