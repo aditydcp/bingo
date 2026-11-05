@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 import {
@@ -6,96 +6,83 @@ import {
   LETTERS,
   checkBingo,
   markedSetFrom,
+  computeRecords,
+  eventStatus,
   thumb,
   fullPhoto,
 } from "../lib/bingo";
-import { api, getSession, linkGoogle, supabase } from "../lib/supabase";
+import { api, getSession, linkGoogle, supabase, sleep } from "../lib/supabase";
 import { compressImage } from "../lib/compressImage";
+import { renderBoardImage, formatTime } from "../lib/boardImage";
+import { feedback, useFeedback } from "../lib/feedback";
+import {
+  backoff,
+  isPermanent,
+  pendingStore,
+  photoSizeForConnection,
+  uploadPhoto,
+} from "../lib/uploadQueue";
 import GoogleButton from "../components/GoogleButton";
+import Celebration from "../components/Celebration";
+import FeedbackToggles from "../components/FeedbackToggles";
+import Logo from "../components/Logo";
 
-function loadImg(src) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
-    img.src = src;
-  });
-}
+const ERROR_TEXT = {
+  event_not_started: "Event belum dimulai. Foto bisa diunggah saat event berlangsung.",
+  event_closed: "Event sudah selesai. Foto tidak bisa ditambah lagi.",
+  board_changed: "Papan sudah berubah, foto yang belum terkirim dibatalkan.",
+};
 
-function rrPath(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.arcTo(x + w, y, x + w, y + r, r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-  ctx.lineTo(x + r, y + h);
-  ctx.arcTo(x, y + h, x, y + h - r, r);
-  ctx.lineTo(x, y + r);
-  ctx.arcTo(x, y, x + r, y, r);
-  ctx.closePath();
-}
-function rrFill(ctx, x, y, w, h, r, fill) {
-  rrPath(ctx, x, y, w, h, r);
-  ctx.fillStyle = fill;
-  ctx.fill();
-}
-function rrStroke(ctx, x, y, w, h, r) {
-  rrPath(ctx, x, y, w, h, r);
-  ctx.stroke();
-}
-function wrapText(ctx, text, cx, cy, maxW, lineH) {
-  const words = text.split(" ");
-  const lines = [];
-  let line = "";
-  for (const word of words) {
-    const test = line ? `${line} ${word}` : word;
-    if (ctx.measureText(test).width > maxW && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = test;
-    }
-  }
-  if (line) lines.push(line);
-  const total = lines.length * lineH;
-  let y = cy - total / 2 + lineH * 0.75;
-  for (const l of lines) {
-    ctx.fillText(l, cx, y);
-    y += lineH;
-  }
+const withFree = (cells) => ({
+  ...cells,
+  [FREE_POS]: { ...cells?.[FREE_POS], marked: true, isFree: true },
+});
+
+function countdown(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(s / 86400);
+  const hms = [Math.floor(s / 3600) % 24, Math.floor(s / 60) % 60, s % 60]
+    .map((n) => String(n).padStart(2, "0"))
+    .join(":");
+  return d ? `${d} hari ${hms}` : hms;
 }
 
 export default function BingoPage() {
   const router = useRouter();
   const fileRef = useRef(null);
 
-  const [user, setUser] = useState(null); // { name, entitas }
+  const [user, setUser] = useState(null); // { name }
   const [isGuest, setIsGuest] = useState(false);
   const [linkError, setLinkError] = useState("");
   const [board, setBoard] = useState(null); // user's personal 25-cell ordered array
+  const [round, setRound] = useState(1);
   const [cells, setCells] = useState({}); // keyed by board position (0-24)
-  const [winLines, setWinLines] = useState([]);
-  const [finished, setFinished] = useState(false);
-  const [finishTime, setFinishTime] = useState(null);
+  const [records, setRecords] = useState({});
+  const [event, setEvent] = useState({ start: null, end: null });
+  const [clockOffset, setClockOffset] = useState(0); // server time − device time
+  const [now, setNow] = useState(Date.now());
   const [selectedCell, setSelectedCell] = useState(null);
-  const [uploading, setUploading] = useState(false);
+  const [pending, setPending] = useState({}); // position → { url, progress, status: "sending" | "waiting" }
+  const [online, setOnline] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [rerolling, setRerolling] = useState(false);
+  const [feedbackSettings, toggleFeedback] = useFeedback();
   const [previewCell, setPreviewCell] = useState(null);
-  const [showFinishModal, setShowFinishModal] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [celebration, setCelebration] = useState(null); // { kind, lines }
+  const [notice, setNotice] = useState("");
 
-  const markedSet = new Set(
-    Object.entries(cells)
-      .filter(([, v]) => v?.marked)
-      .map(([k]) => Number(k)),
-  );
+  const markedSet = markedSetFrom(cells);
+  const winLines = checkBingo(markedSet);
   const winSet = new Set(winLines.flat());
   const hasBingo = winLines.length > 0;
   const markedCount = markedSet.size;
+  const status = eventStatus(event.start, event.end, now + clockOffset);
+  const canUpload = status === "open";
 
-  const recomputeBingo = useCallback((cellMap) => {
-    setWinLines(checkBingo(markedSetFrom(cellMap)));
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
   }, []);
 
   useEffect(() => {
@@ -110,29 +97,153 @@ export default function BingoPage() {
       history.replaceState(null, "", window.location.pathname);
     }
 
-    (async () => {
-      if (!(await getSession())) {
-        router.replace("/");
-        return;
-      }
-      try {
-        const data = await api("/api/state");
-        setUser(data.profile);
-        setIsGuest(data.isGuest);
-        setBoard(data.board);
-        const loaded = data.cells || {};
-        loaded[FREE_POS] = { ...loaded[FREE_POS], marked: true, isFree: true };
-        setCells(loaded);
-        recomputeBingo(loaded);
-        if (data.completion) {
-          setFinished(true);
-          setFinishTime(data.completion.completedAt);
-        }
-      } catch {
-        router.replace("/");
-      }
-    })();
+    loadState();
   }, []);
+
+  const loadState = async () => {
+    setLoadError(false);
+    const session = await getSession();
+    if (!session) {
+      router.replace("/");
+      return;
+    }
+    let data;
+    try {
+      data = await api("/api/state");
+    } catch (err) {
+      // Signed out / no alias yet → back to sign-in. Anything else is most likely bad signal.
+      if (err.status === 401 || err.status === 404) router.replace("/");
+      else setLoadError(true);
+      return;
+    }
+    userIdRef.current = session.user.id;
+    boardRef.current = data.board;
+    cellsRef.current = withFree(data.cells);
+    setUser(data.profile);
+    setIsGuest(data.isGuest);
+    setBoard(data.board);
+    setRound(data.round);
+    setCells(cellsRef.current);
+    setRecords(data.records);
+    setEvent({ start: data.eventStart, end: data.eventEnd });
+    setClockOffset(new Date(data.serverNow).getTime() - Date.now());
+    resumeSavedUploads();
+  };
+
+  // ── Photo upload queue (survives bad signal and reloads) ──────────
+  const userIdRef = useRef(null);
+  const boardRef = useRef(null);
+  const cellsRef = useRef({});
+  const queueRef = useRef([]); // [{ key, position, cellId, blob, attempts }]
+  const runningRef = useRef(false);
+  const abortRef = useRef(null);
+  const wakeRef = useRef(null);
+
+  const setPendingFor = (pos, patch) =>
+    setPending((p) => (patch ? { ...p, [pos]: { ...p[pos], ...patch } } : omit(p, pos)));
+  const omit = (obj, key) => {
+    const { [key]: gone, ...rest } = obj;
+    if (gone?.url) URL.revokeObjectURL(gone.url);
+    return rest;
+  };
+
+  const dropFromQueue = (item) => {
+    queueRef.current = queueRef.current.filter((i) => i !== item);
+    pendingStore.remove(item.key);
+    setPendingFor(item.position, null);
+  };
+
+  const enqueue = (item) => {
+    queueRef.current.filter((i) => i.position === item.position).forEach(dropFromQueue);
+    queueRef.current.push(item);
+    setPendingFor(item.position, { url: URL.createObjectURL(item.blob), progress: 0, status: "waiting" });
+    runQueue();
+  };
+
+  const resumeSavedUploads = async () => {
+    const saved = await pendingStore.load(userIdRef.current);
+    saved.forEach((item) => {
+      if (boardRef.current[item.position]?.cellId === item.cellId) enqueue({ ...item, attempts: 0 });
+      else pendingStore.remove(item.key);
+    });
+  };
+
+  // Sends queued photos one at a time; waits (and retries) while the signal is bad
+  const runQueue = async () => {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    try {
+      while (queueRef.current.length) {
+        const item = queueRef.current[0];
+        if (!navigator.onLine) {
+          await new Promise((resolve) => (wakeRef.current = resolve)); // woken by "online"
+          continue;
+        }
+        if (boardRef.current?.[item.position]?.cellId !== item.cellId) {
+          dropFromQueue(item);
+          setNotice(ERROR_TEXT.board_changed);
+          continue;
+        }
+        setPendingFor(item.position, { status: "sending", progress: 0 });
+        abortRef.current = new AbortController();
+        try {
+          const data = await uploadPhoto({
+            position: item.position,
+            blob: item.blob,
+            signal: abortRef.current.signal,
+            onProgress: (progress) => setPendingFor(item.position, { progress }),
+          });
+          dropFromQueue(item);
+          onUploaded(item.position, data);
+        } catch (err) {
+          item.attempts += 1;
+          if (isPermanent(err, item.attempts)) {
+            if (!err.aborted) {
+              dropFromQueue(item);
+              setNotice(ERROR_TEXT[err.message] || "Foto gagal dikirim. Coba ambil ulang.");
+              feedback("error");
+            }
+            continue;
+          }
+          setPendingFor(item.position, { status: "waiting", progress: 0 });
+          await Promise.race([sleep(backoff(item.attempts)), new Promise((r) => (wakeRef.current = r))]);
+        }
+      }
+    } finally {
+      runningRef.current = false;
+    }
+  };
+
+  const onUploaded = (pos, data) => {
+    const before = cellsRef.current;
+    const after = { ...before, [pos]: data.cell };
+    cellsRef.current = after;
+    setCells(after);
+    setRecords(data.records);
+    if (!celebrate(before, after)) feedback("success");
+  };
+
+  useEffect(() => {
+    setOnline(navigator.onLine);
+    const wake = () => {
+      setOnline(navigator.onLine);
+      if (navigator.onLine) wakeRef.current?.();
+    };
+    const warn = (e) => {
+      if (queueRef.current.length) e.preventDefault();
+    };
+    window.addEventListener("online", wake);
+    window.addEventListener("offline", wake);
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      window.removeEventListener("online", wake);
+      window.removeEventListener("offline", wake);
+      window.removeEventListener("beforeunload", warn);
+    };
+  }, []);
+
+  const pendingCount = Object.keys(pending).length;
+  const sendingNow = Object.values(pending).find((p) => p.status === "sending");
 
   const handleSignOut = async () => {
     if (
@@ -152,282 +263,143 @@ export default function BingoPage() {
     if (error) setLinkError("Gagal menghubungkan Google. Coba lagi.");
   };
 
+  const handleReroll = async () => {
+    if (
+      !confirm(
+        "Acak ulang papan?\n\nPapan dan semua sel yang sudah terisi akan direset dengan sel acak baru. Rekor Bingo yang sudah tercatat tetap disimpan." +
+          (pendingCount ? `\n\n${pendingCount} foto yang belum terkirim akan dibatalkan.` : ""),
+      )
+    )
+      return;
+    feedback("reroll");
+    setRerolling(true);
+    try {
+      const data = await api("/api/reroll", { method: "POST", timeout: 30000 });
+      abortRef.current?.abort();
+      [...queueRef.current].forEach(dropFromQueue);
+      boardRef.current = data.board;
+      cellsRef.current = withFree(data.cells);
+      setBoard(data.board);
+      setRound(data.round);
+      setCells(cellsRef.current);
+      feedback("success");
+    } catch {
+      feedback("error");
+      alert(
+        navigator.onLine
+          ? "Gagal mengacak ulang papan. Coba lagi."
+          : "Tidak ada sinyal. Coba acak ulang lagi saat sinyal kembali.",
+      );
+    } finally {
+      setRerolling(false);
+    }
+  };
+
   const downloadBingoCard = async () => {
     setDownloading(true);
     try {
-      const W = 720;
-      const PAD = 28;
-      const GAP = 3;
-      const gridW = W - PAD * 2;
-      const cellSize = Math.floor((gridW - GAP * 4) / 5);
-      const headerH = Math.floor(cellSize * 0.38);
-      const topH = 148;
-      const gridH = headerH + GAP + 5 * (cellSize + GAP);
-      const botH = 84;
-      const H = topH + gridH + botH;
-
-      const canvas = document.createElement("canvas");
-      canvas.width = W;
-      canvas.height = H;
-      const ctx = canvas.getContext("2d");
-
-      // background
-      const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-      bgGrad.addColorStop(0, "#060d1f");
-      bgGrad.addColorStop(0.4, "#0a1628");
-      bgGrad.addColorStop(0.7, "#0d2248");
-      bgGrad.addColorStop(1, "#0a3a7a");
-      ctx.fillStyle = bgGrad;
-      ctx.fillRect(0, 0, W, H);
-
-      // subtle grid lines
-      ctx.strokeStyle = "rgba(0,150,255,0.06)";
-      ctx.lineWidth = 1;
-      for (let x = 0; x < W; x += 30) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-      for (let y = 0; y < H; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-
-      // logo
-      const logoImg = await loadImg("/logo.png");
-      if (logoImg) {
-        const lh = 56;
-        const lw = (lh / logoImg.naturalHeight) * logoImg.naturalWidth;
-        ctx.drawImage(logoImg, PAD, 18, Math.min(lw, 130), lh);
-      }
-
-      // title
-      ctx.textAlign = "right";
-      ctx.font = "800 20px 'Inter', system-ui, sans-serif";
-      ctx.fillStyle = "#00d4ff";
-      ctx.fillText("FIRST SUMMIT BINGO", W - PAD, 42);
-      ctx.font = "600 13px 'Inter', system-ui, sans-serif";
-      ctx.fillStyle = "#60a5fa";
-      ctx.fillText(`'${new Date().getFullYear().toString().slice(2)}`, W - PAD, 62);
-
-      // user info
-      ctx.textAlign = "left";
-      ctx.font = "700 17px 'Inter', system-ui, sans-serif";
-      ctx.fillStyle = "#ffffff";
-      ctx.fillText(user.name, PAD, 100);
-      ctx.font = "500 12px 'Inter', system-ui, sans-serif";
-      ctx.fillStyle = "#93c5fd";
-      ctx.fillText(user.entitas, PAD, 118);
-
-      // divider
-      const divGrad = ctx.createLinearGradient(PAD, 0, W - PAD, 0);
-      divGrad.addColorStop(0, "rgba(0,150,255,0.9)");
-      divGrad.addColorStop(1, "rgba(0,200,255,0.1)");
-      ctx.strokeStyle = divGrad;
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(PAD, 130); ctx.lineTo(W - PAD, 130); ctx.stroke();
-
-      // FIRST header row
-      const HDRS = ["F", "I", "R", "S", "T"];
-      for (let c = 0; c < 5; c++) {
-        const x = PAD + c * (cellSize + GAP);
-        const y = topH;
-        const hg = ctx.createLinearGradient(x, y, x + cellSize, y + headerH);
-        hg.addColorStop(0, "#0066ff");
-        hg.addColorStop(1, "#00aaff");
-        rrFill(ctx, x, y, cellSize, headerH, 5, hg);
-        ctx.font = `900 ${Math.floor(headerH * 0.56)}px 'Inter', system-ui, sans-serif`;
-        ctx.fillStyle = "#ffffff";
-        ctx.textAlign = "center";
-        ctx.fillText(HDRS[c], x + cellSize / 2, y + headerH * 0.72);
-      }
-
-      // load photos
-      const photoImgs = {};
-      await Promise.all(
-        Object.entries(cells).map(async ([pos, state]) => {
-          if (state?.photoUrl) {
-            const img = await loadImg(thumb(state.photoUrl, 400));
-            if (img) photoImgs[pos] = img;
-          }
-        }),
-      );
-
-      // draw 5×5 cells
-      for (let r = 0; r < 5; r++) {
-        for (let c = 0; c < 5; c++) {
-          const pos = r * 5 + c;
-          const x = PAD + c * (cellSize + GAP);
-          const y = topH + headerH + GAP + r * (cellSize + GAP);
-          const state = cells[pos];
-          const isMarked = !!state?.marked;
-          const isFree = pos === FREE_POS;
-          const isWin = winSet.has(pos);
-          const cellData = board[pos];
-
-          // bg + border
-          if (isFree) {
-            rrFill(ctx, x, y, cellSize, cellSize, 6, "rgba(15,50,120,0.9)");
-            ctx.strokeStyle = "rgba(245,158,11,0.8)";
-            ctx.lineWidth = 2;
-            rrStroke(ctx, x, y, cellSize, cellSize, 6);
-          } else if (isWin) {
-            rrFill(ctx, x, y, cellSize, cellSize, 6, "rgba(0,50,120,0.9)");
-            ctx.shadowColor = "rgba(245,158,11,0.8)";
-            ctx.shadowBlur = 14;
-            ctx.strokeStyle = "#f59e0b";
-            ctx.lineWidth = 2.5;
-            rrStroke(ctx, x, y, cellSize, cellSize, 6);
-            ctx.shadowBlur = 0;
-          } else if (isMarked) {
-            rrFill(ctx, x, y, cellSize, cellSize, 6, "rgba(0,50,120,0.8)");
-            ctx.strokeStyle = "rgba(0,200,255,0.4)";
-            ctx.lineWidth = 1;
-            rrStroke(ctx, x, y, cellSize, cellSize, 6);
-          } else {
-            rrFill(ctx, x, y, cellSize, cellSize, 6, "rgba(0,20,60,0.7)");
-            ctx.strokeStyle = "rgba(0,150,255,0.25)";
-            ctx.lineWidth = 1;
-            rrStroke(ctx, x, y, cellSize, cellSize, 6);
-          }
-
-          // content
-          if (photoImgs[pos]) {
-            ctx.save();
-            rrPath(ctx, x + 1, y + 1, cellSize - 2, cellSize - 2, 5);
-            ctx.clip();
-            const img = photoImgs[pos];
-            const scale = Math.max(cellSize / img.naturalWidth, cellSize / img.naturalHeight);
-            const dw = img.naturalWidth * scale;
-            const dh = img.naturalHeight * scale;
-            ctx.drawImage(img, x + (cellSize - dw) / 2, y + (cellSize - dh) / 2, dw, dh);
-            ctx.fillStyle = "rgba(0,0,40,0.25)";
-            ctx.fillRect(x, y, cellSize, cellSize);
-            ctx.restore();
-            const bs = Math.floor(cellSize * 0.28);
-            ctx.fillStyle = "rgba(0,200,100,0.9)";
-            ctx.beginPath();
-            ctx.arc(x + cellSize - bs / 2 - 3, y + bs / 2 + 3, bs / 2, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.font = `bold ${Math.floor(bs * 0.6)}px system-ui`;
-            ctx.fillStyle = "#ffffff";
-            ctx.textAlign = "center";
-            ctx.fillText("✓", x + cellSize - bs / 2 - 3, y + bs / 2 + 3 + bs * 0.22);
-          } else if (isFree) {
-            ctx.font = `${Math.floor(cellSize * 0.3)}px system-ui`;
-            ctx.fillStyle = "#fde68a";
-            ctx.textAlign = "center";
-            ctx.fillText("★", x + cellSize / 2, y + cellSize * 0.54);
-            ctx.font = `bold ${Math.floor(cellSize * 0.15)}px 'Inter', sans-serif`;
-            ctx.fillStyle = "#fde68a";
-            ctx.fillText("FREE", x + cellSize / 2, y + cellSize * 0.76);
-          } else {
-            const label = cellData?.label || "";
-            const fs = Math.max(9, Math.floor(cellSize * 0.118));
-            ctx.font = `${fs}px 'Inter', system-ui, sans-serif`;
-            ctx.fillStyle = isMarked ? "#86efac" : "#bfdbfe";
-            ctx.textAlign = "center";
-            wrapText(ctx, label, x + cellSize / 2, y + cellSize / 2, cellSize - 10, fs + 3);
-            if (isMarked) {
-              const badge = Math.floor(cellSize * 0.22);
-              ctx.font = `bold ${badge}px system-ui`;
-              ctx.fillStyle = "rgba(74,222,128,0.9)";
-              ctx.textAlign = "center";
-              ctx.fillText("✓", x + cellSize - badge * 0.5, y + badge * 0.8);
-            }
-          }
-        }
-      }
-
-      // footer
-      const fy = topH + gridH + 22;
-      ctx.shadowBlur = 0;
-      ctx.textAlign = "center";
-      ctx.font = "bold 14px 'Inter', system-ui, sans-serif";
-      ctx.fillStyle = "#4ade80";
-      ctx.fillText("BINGO SELESAI!", W / 2, fy);
-      ctx.font = "12px 'Inter', system-ui, sans-serif";
-      ctx.fillStyle = "#93c5fd";
-      ctx.fillText(
-        new Date(finishTime).toLocaleString("id-ID", { dateStyle: "full", timeStyle: "medium" }),
-        W / 2,
-        fy + 22,
-      );
-      ctx.font = "10px 'Inter', system-ui, sans-serif";
-      ctx.fillStyle = "rgba(100,150,255,0.45)";
-      ctx.fillText("FIRST Summit Bingo", W / 2, fy + 46);
-
+      const { firstBingoAt, fullAt } = computeRecords(cells);
+      const blob = await renderBoardImage({
+        name: user.name,
+        board,
+        cells,
+        highlightLines: winLines,
+        title: fullAt ? "PAPAN PENUH!" : "BINGO!",
+        subtitle: formatTime(fullAt || firstBingoAt),
+      });
       const link = document.createElement("a");
       link.download = `bingo-${user.name.replace(/\s+/g, "-")}.png`;
-      link.href = canvas.toDataURL("image/png");
+      link.href = URL.createObjectURL(blob);
       link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 10000);
     } finally {
       setDownloading(false);
     }
   };
 
-  const handleCellClick = (pos) => {
-    if (pos === FREE_POS) return;
-    const state = cells[pos];
-    if (state?.marked && state?.photoUrl) {
-      setPreviewCell(pos);
+  const openCamera = (pos) => {
+    if (!canUpload) {
+      feedback("error");
+      setNotice(ERROR_TEXT[status === "before" ? "event_not_started" : "event_closed"]);
       return;
     }
-    if (state?.marked) return;
+    feedback("tap");
     setSelectedCell(pos);
     fileRef.current?.click();
   };
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file || selectedCell === null) return;
-    setUploading(true);
-    try {
-      // compress on the phone → signed direct upload to Cloudinary → record on our API
-      const [photo, sig] = await Promise.all([
-        compressImage(file),
-        api("/api/upload-signature", { method: "POST", body: { position: selectedCell } }),
-      ]);
-      const fd = new FormData();
-      fd.append("file", photo);
-      fd.append("api_key", sig.apiKey);
-      fd.append("timestamp", sig.timestamp);
-      fd.append("public_id", sig.publicId);
-      fd.append("signature", sig.signature);
-      const uploadRes = await fetch(sig.uploadUrl, { method: "POST", body: fd });
-      if (!uploadRes.ok) throw new Error("cloudinary upload failed");
-      const uploaded = await uploadRes.json();
-      const { cell } = await api("/api/cells", {
-        method: "POST",
-        body: {
-          position: selectedCell,
-          photoUrl: uploaded.secure_url,
-          publicId: uploaded.public_id,
-        },
-      });
-      const updated = { ...cells, [selectedCell]: cell };
-      setCells(updated);
-      recomputeBingo(updated);
-    } catch {
-      alert("Upload gagal. Coba lagi.");
-    } finally {
-      setUploading(false);
-      setSelectedCell(null);
-      if (fileRef.current) fileRef.current.value = "";
+  const handleCellClick = (pos) => {
+    if (pos === FREE_POS || rerolling) return;
+    if (pending[pos]) {
+      if (confirm("Foto ini belum terkirim. Batalkan foto ini?")) {
+        const item = queueRef.current.find((i) => i.position === pos);
+        if (item === queueRef.current[0]) abortRef.current?.abort();
+        if (item) dropFromQueue(item);
+      }
+      return;
     }
+    if (cells[pos]?.photoUrl) {
+      feedback("tap");
+      setPreviewCell(pos);
+      return;
+    }
+    openCamera(pos);
   };
 
-  const handleFinishConfirm = async () => {
-    try {
-      const data = await api("/api/finish", { method: "POST" });
-      setFinished(true);
-      setFinishTime(data.completedAt);
-      setShowFinishModal(false);
-    } catch {
-      alert("Gagal menyimpan. Coba lagi.");
-    }
+  // Shows the ceremony for a new line / Bingo / full board; returns whether it did
+  const celebrate = (before, after) => {
+    const linesBefore = checkBingo(markedSetFrom(before)).length;
+    const linesAfter = checkBingo(markedSetFrom(after)).length;
+    const full = (c) => markedSetFrom(c).size === 25;
+    if (full(after) && !full(before)) setCelebration({ kind: "full" });
+    else if (linesBefore === 0 && linesAfter > 0) setCelebration({ kind: "bingo" });
+    else if (linesAfter > linesBefore) setCelebration({ kind: "line", lines: linesAfter });
+    else return false;
+    return true;
   };
+
+  // Photo taken: shrink it, keep it on the phone, and queue it for upload
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    const pos = selectedCell;
+    setSelectedCell(null);
+    if (fileRef.current) fileRef.current.value = "";
+    if (!file || pos === null) return;
+    const { maxSide, quality } = photoSizeForConnection();
+    const blob = await compressImage(file, maxSide, quality);
+    const item = {
+      key: `${userIdRef.current}:${pos}`,
+      userId: userIdRef.current,
+      position: pos,
+      cellId: boardRef.current[pos].cellId,
+      blob,
+      createdAt: Date.now(),
+    };
+    await pendingStore.save(item);
+    enqueue({ ...item, attempts: 0 });
+  };
+
+  if (loadError) {
+    return (
+      <div className="bingo-bg min-h-screen flex items-center justify-center p-6">
+        <div className="glass-card rounded-2xl p-6 text-center max-w-xs fade-in">
+          <div className="text-4xl mb-2">📶</div>
+          <p className="text-slate-800 font-extrabold">Sinyal lemah</p>
+          <p className="text-slate-500 text-sm mt-1">Papan bingo belum bisa dimuat.</p>
+          <button onClick={loadState} className="btn-primary rounded-xl px-6 py-2.5 text-white font-extrabold text-sm mt-4">
+            Coba lagi
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!user || !board) {
     return (
       <div className="bingo-bg min-h-screen flex items-center justify-center">
-        <div className="grid-overlay" />
         <div className="relative z-10 text-center">
           <div className="spinner mb-4" />
-          <p className="text-blue-300 text-sm">Memuat bingo board...</p>
+          <p className="text-slate-500 text-sm">Memuat bingo board...</p>
         </div>
       </div>
     );
@@ -439,37 +411,56 @@ export default function BingoPage() {
         <title>Bingo — {user.name}</title>
       </Head>
       <div className="bingo-bg min-h-screen">
-        <div className="grid-overlay" />
 
         {/* Navbar */}
         <nav className="navbar relative z-10 px-4 py-3 flex items-center justify-between">
-          <div>
-            <span className="text-white font-bold text-sm">
-              FIRST SUMMIT Bingo
-            </span>
-            <span className="ml-2 text-blue-400 text-xs">
-              '{new Date().getFullYear().toString().slice(2)}
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <p className="text-white text-xs font-medium">{user.name}</p>
-              <p className="text-blue-400 text-[10px]">{user.entitas}</p>
-            </div>
-            <button
-              onClick={handleSignOut}
-              className="text-blue-400 hover:text-white text-xs transition-colors px-2 py-1"
-            >
-              Keluar
-            </button>
-          </div>
+          <Logo />
+          <button
+            onClick={handleSignOut}
+            className="text-slate-400 hover:text-slate-900 text-xs transition-colors px-2 py-1"
+          >
+            Keluar
+          </button>
         </nav>
 
         <div className="relative z-10 px-3 pb-8 max-w-xl mx-auto">
+          {/* Player + sound / vibration / music toggles */}
+          <div className="flex items-center justify-between gap-2 mt-3">
+            <span className="badge badge-gold max-w-[40%] truncate">{user.name}</span>
+            <FeedbackToggles settings={feedbackSettings} toggle={toggleFeedback} />
+          </div>
+
+          {/* Event window */}
+          {status === "before" && (
+            <div className="glass-card rounded-xl p-3 mt-3 text-center border border-orange-200">
+              <p className="text-slate-600 text-xs">Event dimulai dalam</p>
+              <p className="text-orange-500 font-mono font-bold text-xl mt-0.5">
+                {countdown(new Date(event.start).getTime() - (now + clockOffset))}
+              </p>
+              <p className="text-slate-400 text-[10px] mt-1">
+                {formatTime(event.start)} · Kamu sudah bisa melihat papan dan mengacak ulang
+              </p>
+            </div>
+          )}
+          {status === "after" && (
+            <div className="glass-card rounded-xl p-3 mt-3 text-center border border-rose-200">
+              <p className="text-rose-600 font-semibold text-sm">Event telah selesai</p>
+              <p className="text-slate-500 text-xs mt-0.5">Foto tidak bisa ditambah atau diganti lagi.</p>
+            </div>
+          )}
+          {status === "open" && event.end && (
+            <p className="text-center text-slate-500 text-[11px] mt-3">
+              Event berakhir dalam{" "}
+              <span className="font-mono text-orange-500">
+                {countdown(new Date(event.end).getTime() - (now + clockOffset))}
+              </span>
+            </p>
+          )}
+
           {/* Guest → Google upgrade */}
           {isGuest && (
-            <div className="glass-card rounded-xl p-3 mt-3 border border-yellow-500/30">
-              <p className="text-yellow-200 text-xs mb-2">
+            <div className="glass-card rounded-xl p-3 mt-3 border border-amber-200">
+              <p className="text-amber-700 text-xs mb-2">
                 Kamu bermain sebagai tamu — progres hanya tersimpan di perangkat
                 ini. Hubungkan Google agar progres aman dan bisa dibuka di
                 perangkat lain.
@@ -478,26 +469,51 @@ export default function BingoPage() {
             </div>
           )}
           {linkError && (
-            <div className="mt-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">
+            <div className="mt-3 px-4 py-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs">
               {linkError}
             </div>
+          )}
+          {notice && (
+            <div
+              className="mt-3 px-4 py-3 rounded-xl bg-sky-50 border border-sky-200 text-slate-600 text-xs"
+              onClick={() => setNotice("")}
+            >
+              {notice}
+            </div>
+          )}
+
+          {/* Connection / upload status */}
+          {!online ? (
+            <div className="mt-3 px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-xs fade-in">
+              <b>📵 Tidak ada sinyal.</b>{" "}
+              {pendingCount
+                ? `${pendingCount} foto tersimpan di HP dan akan dikirim otomatis saat sinyal kembali.`
+                : "Kamu tetap bisa mengambil foto; foto akan dikirim otomatis saat sinyal kembali."}
+            </div>
+          ) : (
+            pendingCount > 0 && (
+              <div className="mt-3 px-4 py-2.5 rounded-xl bg-orange-50 border border-orange-200 text-orange-700 text-xs flex items-center gap-2 fade-in">
+                <span className="spinner-sm flex-shrink-0" />
+                <span>
+                  {sendingNow
+                    ? `Mengirim foto… ${Math.round((sendingNow.progress || 0) * 100)}%`
+                    : "Sinyal lemah, mencoba mengirim lagi…"}
+                  {pendingCount > 1 && ` (${pendingCount} foto antre)`}
+                </span>
+              </div>
+            )
           )}
 
           {/* Bingo banner */}
           {hasBingo && (
             <div className="bingo-banner rounded-xl p-3 my-3 text-center fade-in">
-              <p className="text-xl font-black text-yellow-300 tracking-widest">
+              <p className="text-xl font-black text-amber-600 tracking-widest">
                 🎉 B I N G O !
               </p>
-              {finished ? (
-                <p className="text-green-300 text-xs mt-1">
-                  Selesai · {new Date(finishTime).toLocaleString("id-ID")}
-                </p>
-              ) : (
-                <p className="text-blue-200 text-xs mt-1">
-                  Kamu berhasil! Klik tombol Finish untuk menyelesaikan.
-                </p>
-              )}
+              <p className="text-slate-600 text-xs mt-1">
+                {winLines.length} line selesai
+                {markedCount < 25 && " · Lanjutkan sampai papan penuh!"}
+              </p>
             </div>
           )}
 
@@ -509,13 +525,22 @@ export default function BingoPage() {
                 style={{ width: `${(markedCount / 25) * 100}%` }}
               />
             </div>
-            <span className="text-blue-300 text-xs font-mono whitespace-nowrap">
+            <span className="text-slate-500 text-xs font-mono whitespace-nowrap">
               {markedCount}/25
             </span>
           </div>
 
-          {/* Bingo grid — rendered from user's personal board */}
-          <div className="bingo-grid">
+          {/* Bingo grid — rendered from user's personal board; muted while rerolling */}
+          <div className="relative">
+          {rerolling && (
+            <div className="board-busy-overlay fade-in">
+              <div className="spinner" />
+              <p className="text-slate-700 font-extrabold text-sm bg-white/80 rounded-full px-3 py-1">
+                Mengacak papan…
+              </p>
+            </div>
+          )}
+          <div className={`bingo-grid ${rerolling ? "board-busy" : ""}`} aria-busy={rerolling}>
             {LETTERS.map((l) => (
               <div key={l} className="bingo-header-cell">
                 {l}
@@ -529,6 +554,7 @@ export default function BingoPage() {
               const isFree = pos === FREE_POS;
               const isWin = winSet.has(pos);
               const hasPhoto = !!state?.photoUrl;
+              const queued = pending[pos];
 
               return (
                 <div
@@ -536,7 +562,24 @@ export default function BingoPage() {
                   className={`bingo-cell ${isMarked ? "marked" : "unmarked"} ${isWin ? "winning" : ""} ${isFree ? "free-cell" : ""}`}
                   onClick={() => handleCellClick(pos)}
                 >
-                  {hasPhoto ? (
+                  {queued ? (
+                    <>
+                      <img src={queued.url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                      <div className="pending-overlay">
+                        {queued.status === "sending" ? (
+                          <>
+                            <span className="spinner-sm" />
+                            {Math.round((queued.progress || 0) * 100)}%
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-base">⏳</span>
+                            {online ? "antre" : "offline"}
+                          </>
+                        )}
+                      </div>
+                    </>
+                  ) : hasPhoto ? (
                     <>
                       <img
                         src={thumb(state.photoUrl)}
@@ -550,83 +593,97 @@ export default function BingoPage() {
                   ) : isFree ? (
                     <div className="flex flex-col items-center gap-0.5">
                       <span className="text-lg">⭐</span>
-                      <span className="text-[9px] font-bold text-yellow-300 tracking-widest">
-                        FREE
+                      <span className="text-[9px] font-bold text-amber-600 tracking-widest">
+                        {cell.label || "GARUT"}
                       </span>
-                    </div>
-                  ) : isMarked ? (
-                    <div className="flex flex-col items-center gap-0.5 p-1">
-                      <span className="text-green-400 text-lg">✓</span>
-                      <p className="text-[8px] text-green-300 text-center leading-tight">
-                        {cell.label}
-                      </p>
                     </div>
                   ) : (
                     <div className="p-1 flex flex-col items-center justify-center h-full">
-                      <p className="text-[9px] leading-tight text-center text-blue-100">
+                      <p className="text-[9px] leading-tight text-center text-slate-700">
                         {cell.label}
                       </p>
-                      <div className="mt-1 w-4 h-4 rounded-full border border-blue-400/40 flex items-center justify-center">
-                        <span className="text-[8px] text-blue-400">+</span>
-                      </div>
+                      {canUpload && (
+                        <div className="mt-1 w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center">
+                          <span className="text-[8px] text-slate-400">📷</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               );
             })}
           </div>
+          </div>
 
-          {/* Finish button */}
-          {hasBingo && !finished && (
-            <button
-              onClick={() => setShowFinishModal(true)}
-              className="btn-finish w-full rounded-xl py-4 text-white font-black text-base mt-4 tracking-wide"
-            >
-              🏆 FINISH BINGO!
-            </button>
-          )}
-
-          {finished && (
-            <div className="glass-card rounded-xl p-4 mt-4 text-center">
-              <p className="text-green-400 font-bold text-sm">
-                ✅ Bingo Selesai!
+          {/* Recorded times */}
+          {(records.firstBingoAt || records.fullAt) && (
+            <div className="glass-card rounded-xl p-4 mt-4 space-y-2">
+              <p className="text-slate-800 font-semibold text-sm">🏅 Rekor kamu</p>
+              {records.firstBingoAt && (
+                <div className="flex justify-between gap-3 text-xs">
+                  <span className="text-slate-500">Bingo pertama</span>
+                  <span className="text-amber-600 text-right">
+                    {new Date(records.firstBingoAt).toLocaleString("id-ID")}
+                    {records.firstBingoRound !== round && (
+                      <span className="text-slate-400"> (papan sebelumnya)</span>
+                    )}
+                  </span>
+                </div>
+              )}
+              {records.fullAt && (
+                <div className="flex justify-between gap-3 text-xs">
+                  <span className="text-slate-500">Papan penuh</span>
+                  <span className="text-teal-600 text-right">
+                    {new Date(records.fullAt).toLocaleString("id-ID")}
+                    {records.fullRound !== round && (
+                      <span className="text-slate-400"> (papan sebelumnya)</span>
+                    )}
+                  </span>
+                </div>
+              )}
+              <p className="text-slate-400 text-[10px]">
+                Mengganti foto di line yang menang akan memperbarui waktu rekor.
               </p>
-              <p className="text-blue-200 text-xs mt-1">
-                {new Date(finishTime).toLocaleString("id-ID", {
-                  dateStyle: "full",
-                  timeStyle: "medium",
-                })}
-              </p>
-              <button
-                onClick={downloadBingoCard}
-                className="mt-3 w-full glass-card rounded-xl py-2.5 text-cyan-300 text-sm font-semibold hover:text-white transition-colors border border-cyan-500/30 hover:border-cyan-400/60"
-              >
-                ⬇ Unduh Kartu Bingo
-              </button>
             </div>
           )}
 
+          {hasBingo && (
+            <button
+              onClick={downloadBingoCard}
+              className="mt-4 w-full glass-card rounded-xl py-3 text-orange-500 text-sm font-semibold hover:text-slate-900 transition-colors border border-orange-200 hover:border-orange-300"
+            >
+              ⬇ Unduh Kartu Bingo
+            </button>
+          )}
+
+          <button
+            onClick={handleReroll}
+            disabled={rerolling}
+            className="mt-3 w-full glass-card rounded-xl py-3 text-slate-600 text-sm hover:text-slate-900 transition-colors disabled:opacity-50"
+          >
+            {rerolling ? "Mengacak..." : "🔀 Acak Ulang Papan"}
+          </button>
+
           {/* Legend */}
           <div className="mt-5 flex gap-4 justify-center">
-            <span className="flex items-center gap-1.5 text-[10px] text-blue-400">
-              <span className="w-3 h-3 rounded-sm bg-blue-600/40 border border-blue-500/30" />
+            <span className="flex items-center gap-1.5 text-[10px] text-slate-400">
+              <span className="w-3 h-3 rounded-sm bg-white border border-slate-200" />
               Belum
             </span>
-            <span className="flex items-center gap-1.5 text-[10px] text-blue-300">
-              <span className="w-3 h-3 rounded-sm bg-blue-500/50 border border-cyan-400/30" />
+            <span className="flex items-center gap-1.5 text-[10px] text-slate-500">
+              <span className="w-3 h-3 rounded-sm bg-teal-100 border border-teal-300" />
               Selesai
             </span>
-            <span className="flex items-center gap-1.5 text-[10px] text-yellow-300">
+            <span className="flex items-center gap-1.5 text-[10px] text-amber-600">
               <span
-                className="w-3 h-3 rounded-sm border border-yellow-400/60"
-                style={{ background: "rgba(245,158,11,0.25)" }}
+                className="w-3 h-3 rounded-sm border border-amber-400 bg-amber-100"
               />
               Bingo!
             </span>
           </div>
         </div>
 
-        {/* Hidden file input */}
+        {/* Hidden file input — opens the rear camera on phones */}
         <input
           type="file"
           ref={fileRef}
@@ -638,60 +695,27 @@ export default function BingoPage() {
 
         {/* Download overlay */}
         {downloading && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-50">
             <div className="glass-card rounded-2xl p-8 text-center fade-in">
               <div className="spinner mb-4" />
-              <p className="text-white font-semibold">Membuat kartu bingo...</p>
-              <p className="text-blue-300 text-xs mt-1">Mohon tunggu</p>
+              <p className="text-slate-800 font-semibold">Membuat kartu bingo...</p>
+              <p className="text-slate-500 text-xs mt-1">Mohon tunggu</p>
             </div>
           </div>
         )}
 
-        {/* Upload overlay */}
-        {uploading && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-            <div className="glass-card rounded-2xl p-8 text-center fade-in">
-              <div className="spinner mb-4" />
-              <p className="text-white font-semibold">Mengunggah foto...</p>
-              <p className="text-blue-300 text-xs mt-1">Mohon tunggu</p>
-            </div>
-          </div>
-        )}
-
-        {/* Finish confirmation modal */}
-        {showFinishModal && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-            <div className="glass-card rounded-2xl p-8 max-w-sm w-full text-center fade-in">
-              <div className="text-5xl mb-4">🏆</div>
-              <h2 className="text-white font-black text-xl mb-2">
-                Selesaikan Bingo?
-              </h2>
-              <p className="text-blue-200 text-sm mb-6">
-                Waktu selesai kamu akan dicatat dan disimpan. Admin akan melihat
-                hasil bingo kamu.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowFinishModal(false)}
-                  className="flex-1 glass-card rounded-xl py-3 text-blue-200 text-sm hover:text-white transition-colors"
-                >
-                  Batal
-                </button>
-                <button
-                  onClick={handleFinishConfirm}
-                  className="flex-1 btn-finish rounded-xl py-3 text-white font-bold text-sm"
-                >
-                  Ya, Selesai!
-                </button>
-              </div>
-            </div>
-          </div>
+        {celebration && (
+          <Celebration
+            kind={celebration.kind}
+            lines={celebration.lines}
+            onClose={() => setCelebration(null)}
+          />
         )}
 
         {/* Photo preview modal */}
         {previewCell !== null && (
           <div
-            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4"
             onClick={() => setPreviewCell(null)}
           >
             <div
@@ -705,33 +729,40 @@ export default function BingoPage() {
                   className="w-full"
                 />
                 <div className="p-4">
-                  <p className="text-white text-sm font-medium">
+                  <p className="text-slate-800 text-sm font-medium">
                     {board[previewCell]?.label}
                   </p>
                   {cells[previewCell]?.markedAt && (
-                    <p className="text-blue-300 text-xs mt-1">
+                    <p className="text-slate-500 text-xs mt-1">
                       {new Date(cells[previewCell].markedAt).toLocaleString(
                         "id-ID",
                       )}
                     </p>
                   )}
+                  {winSet.has(previewCell) && canUpload && (
+                    <p className="text-amber-600 text-[11px] mt-2">
+                      Sel ini bagian dari line Bingo. Mengganti fotonya akan
+                      memperbarui waktu rekor kamu.
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2 mt-3">
-                <button
-                  onClick={() => {
-                    const pos = previewCell;
-                    setPreviewCell(null);
-                    setSelectedCell(pos);
-                    setTimeout(() => fileRef.current?.click(), 50);
-                  }}
-                  className="flex-1 glass-card rounded-xl py-2.5 text-blue-300 text-sm hover:text-white transition-colors text-center"
-                >
-                  Ganti Foto
-                </button>
+                {canUpload && (
+                  <button
+                    onClick={() => {
+                      const pos = previewCell;
+                      setPreviewCell(null);
+                      setTimeout(() => openCamera(pos), 50);
+                    }}
+                    className="flex-1 glass-card rounded-xl py-2.5 text-slate-500 text-sm hover:text-slate-900 transition-colors text-center"
+                  >
+                    Ganti Foto
+                  </button>
+                )}
                 <button
                   onClick={() => setPreviewCell(null)}
-                  className="flex-1 glass-card rounded-xl py-2.5 text-blue-200 text-sm hover:text-white transition-colors text-center"
+                  className="flex-1 glass-card rounded-xl py-2.5 text-slate-600 text-sm hover:text-slate-900 transition-colors text-center"
                 >
                   Tutup
                 </button>

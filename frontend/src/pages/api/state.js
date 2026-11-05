@@ -1,34 +1,32 @@
 import { buildBoard } from "../../lib/bingo";
-import { db, must, requireUser, route } from "../../lib/server/route";
+import { requireUser, route } from "../../lib/server/route";
 import {
   getCells,
-  getMasterCells,
-  getOrCreatePositions,
+  getConfig,
+  getOrCreateBoard,
+  getRecords,
+  publicRecords,
   requireProfile,
 } from "../../lib/server/game";
 
-// The player's board, marks and completion. Assigns a random board on first load.
+// The player's board, marks, records and the event window. Deals a random board on first load.
 export default route({
   GET: async (req, res) => {
     const user = await requireUser(req);
     const profile = await requireProfile(user.id);
-    const masterCells = await getMasterCells();
-    const positions = await getOrCreatePositions(user.id, masterCells);
-    const [cells, completion] = await Promise.all([
-      getCells(user.id),
-      db()
-        .from("completions")
-        .select("completed_at")
-        .eq("user_id", user.id)
-        .maybeSingle()
-        .then(must),
-    ]);
+    const config = await getConfig();
+    const board = await getOrCreateBoard(user.id, config.masterCells);
+    const [cells, records] = await Promise.all([getCells(user.id), getRecords(user.id)]);
     res.json({
       profile,
       isGuest: !!user.is_anonymous,
-      board: buildBoard(positions, masterCells),
+      board: buildBoard(board.positions, config.masterCells),
+      round: board.round,
       cells,
-      completion: completion ? { completedAt: completion.completed_at } : null,
+      records: publicRecords(records),
+      eventStart: config.eventStart,
+      eventEnd: config.eventEnd,
+      serverNow: new Date().toISOString(),
     });
   },
 });
