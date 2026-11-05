@@ -27,9 +27,10 @@ function elapsed(iso, start) {
   return `+${h ? `${h}j ` : ""}${String(m).padStart(2, "0")}m ${String(s % 60).padStart(2, "0")}d`;
 }
 
-function MiniGrid({ cellStates }) {
+// lines: winning lines to highlight (a record snapshot's); defaults to all completed lines
+function MiniGrid({ cellStates, lines }) {
   const markedSet = markedSetFrom(cellStates);
-  const winSet = new Set(checkBingo(markedSet).flat());
+  const winSet = new Set((lines || checkBingo(markedSet)).flat());
 
   return (
     <div className="mini-grid">
@@ -290,7 +291,7 @@ function RankBadge({ i }) {
   );
 }
 
-// One leaderboard: rows = [{ user, time, detail, onView, viewLabel }]
+// One leaderboard: rows = [{ user, time, detail, grid: { cells, lines }, onView, viewLabel }]
 function Leaderboard({ title, icon, rows, eventStart }) {
   return (
     <div className="glass-card rounded-2xl p-4 sm:p-5">
@@ -309,6 +310,9 @@ function Leaderboard({ title, icon, rows, eventStart }) {
               <RankBadge i={i} />
               <div className="flex-1 min-w-0">
                 <p className="text-slate-800 text-sm font-medium truncate">{r.user.name}</p>
+              </div>
+              <div className="flex-shrink-0">
+                <MiniGrid cellStates={r.grid.cells} lines={r.grid.lines} />
               </div>
               <div className="text-right">
                 {r.time ? (
@@ -476,6 +480,12 @@ function AdminDashboard() {
     highlightLines: snapshot.lines?.length ? snapshot.lines : undefined,
   });
 
+  // Mini board for a leaderboard row: the record snapshot if there is one, else the current board
+  const gridFor = (u, snapshot) =>
+    snapshot
+      ? { cells: snapshot.cells || {}, lines: snapshot.lines?.length ? snapshot.lines : undefined }
+      : { cells: info[u.id].cells };
+
   const resetUser = async (userId) => {
     await api(`/api/admin/users/${userId}`, { method: "DELETE" });
     setModal(null);
@@ -587,6 +597,7 @@ function AdminDashboard() {
                     user: u,
                     time: rec.firstBingoAt,
                     detail: `kurang ${toLine} sel`,
+                    grid: gridFor(u, rec.firstBingoSnapshot),
                     viewLabel: rec.firstBingoSnapshot ? "Snapshot" : "Papan",
                     onView: () =>
                       setModal(
@@ -607,6 +618,7 @@ function AdminDashboard() {
                     user: u,
                     time: rec.fullAt,
                     detail: `${filled}/25 sel`,
+                    grid: gridFor(u, rec.fullSnapshot),
                     viewLabel: rec.fullSnapshot ? "Snapshot" : "Papan",
                     onView: () =>
                       setModal(
